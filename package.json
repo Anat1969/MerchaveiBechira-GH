@@ -1,0 +1,6 @@
+{
+  "name": "merchavei-bechira",
+  "private": true,
+  "description": "מרחבי בחירה: ספר חי",
+  "scripts": { "test": "node tests/smoke.cjs" }
+}

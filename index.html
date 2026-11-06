@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>מרחבי בחירה</title>
+<meta name="description" content="ספר מגזינים חי על אדריכלות ובינה מלאכותית: 120 מרחבים מ-12 תחומים, וחמישה ממדים שמחברים ביניהם. אד׳ ענת שטיבלמן.">
+<meta property="og:title" content="מרחבי בחירה: ספר חי">
+<meta property="og:description" content="האדם אינו חי ברעיונות. הוא שוכן במרחבים שמגלמים אותם.">
+<meta property="og:image" content="img/p084.jpg">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23141414'/%3E%3Crect x='14' y='5' width='4' height='22' fill='%23f2d544'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Assistant:wght@300;400;600;700;800&family=Frank+Ruhl+Libre:wght@300;500;700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/app.css">
+<script type="importmap">
+{ "imports": {
+  "three": "./vendor/three/three.module.js",
+  "three/addons/": "./vendor/three/addons/"
+} }
+</script>
+</head>
+<body>
+<header class="bar" dir="rtl">
+  <a class="brand" href="#/" title="לשער הספר">מרחבי בחירה<span>ספר חי</span></a>
+  <nav class="nav" aria-label="ניווט ראשי">
+    <a href="#/c/yesodot" data-nav="c">פרקים</a>
+    <a href="#/atlas" data-nav="atlas">אטלס</a>
+    <a href="#/studio" data-nav="studio">סטודיו</a>
+    <a href="#/narratives" data-nav="narratives">נרטיבים</a>
+    <a href="#/legend" data-nav="legend">מקרא</a>
+  </nav>
+  <div class="ai-menu" id="aiMenu">
+    <button class="logo-btn" id="logoBtn" aria-haspopup="true" aria-expanded="false" title="פעולות">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" fill="currentColor"/><rect x="14" y="5" width="4" height="22" fill="#f2d544"/></svg>
+    </button>
+    <div class="menu" id="menu" role="menu" hidden>
+      <button role="menuitem" data-act="print">הדפסת הדף ב-A4</button>
+      <button role="menuitem" data-act="link">העתקת קישור לדף הזה</button>
+      <button role="menuitem" data-act="motion">עצירת תנועה</button>
+      <a role="menuitem" href="https://www.canva.com/design/DAG0z88GgBk/view" target="_blank" rel="noopener">הספר המקורי בקנבה</a>
+      <a role="menuitem" href="https://github.com/Anat1969/MerchaveiBechira-GH" target="_blank" rel="noopener">קוד המקור</a>
+    </div>
+  </div>
+</header>
+<main id="app" dir="rtl" tabindex="-1"></main>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
