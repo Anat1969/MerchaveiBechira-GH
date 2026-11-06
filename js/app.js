@@ -1,71 +1,108 @@
 import { BOOK, CHAPTERS, NARRATIVES } from '../data/book.js';
 import { attachFx, hexA } from './fx.js';
 
-// ---------- מרחבים שנוספו על ידי הקורא (נשמרים בדפדפן) ----------
-const LS = 'mb.custom.v1';
-const loadCustom = () => { try { return JSON.parse(localStorage.getItem(LS) || '{}'); } catch { return {}; } };
-const saveCustom = d => { try { localStorage.setItem(LS, JSON.stringify(d)); return true; } catch { return false; } };
-const CUSTOM = loadCustom();
+// ================= נתונים =================
+const LS = 'mb.custom.v1', LSI = 'mb.userimg.v1';
+const lsGet = (k, d) => { try { return JSON.parse(localStorage.getItem(k) || JSON.stringify(d)); } catch { return d; } };
+const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch { return false; } };
+const CUSTOM = lsGet(LS, {});
+const USERIMG = lsGet(LSI, {});
 CHAPTERS.forEach(ch => (CUSTOM[ch.id] || []).forEach(it => ch.items.push({ ...it, custom: true })));
 
-// ---------- אינדקס ----------
+const DIMS = BOOK.dims;
+const DEFAULT_DIM = { philosophy: 2, psychology: 3, faith: 2, words: 2, climate: 3, forces: 3 };
 const ALL = [];
+let byId = {};
 function reindex() {
   ALL.length = 0;
-  CHAPTERS.forEach(ch => ch.items.forEach((it, i) => { it.ch = ch; it.i = i; it.page = /^p\d+$/.test(it.img || '') ? parseInt(it.img.slice(1), 10) : null; ALL.push(it); }));
+  CHAPTERS.forEach(ch => ch.items.forEach((it, i) => {
+    it.ch = ch; it.i = i;
+    it.page = /^p\d+$/.test(it.img || '') ? parseInt(it.img.slice(1), 10) : null;
+    ALL.push(it);
+  }));
+  byId = Object.fromEntries(ALL.map(it => [it.id, it]));
 }
 reindex();
-const BYID = () => Object.fromEntries(ALL.map(it => [it.id, it]));
-let byId = BYID();
 const CH = Object.fromEntries(CHAPTERS.map(c => [c.id, c]));
-const DIMS = BOOK.dims;
+
+// הסולם של כל פרק: הפרמטר של התורה עצמה, או הממד שמשתנה בו הכי הרבה
+function scaleOf(ch) {
+  const sc = ch.scale || { label: `ממד ה${DIMS[DEFAULT_DIM[ch.id] ?? 3].k}`, dim: DEFAULT_DIM[ch.id] ?? 3 };
+  const val = it => sc.key === 'hz' ? it.hz : sc.key === 'mass' ? it.mass : sc.key === 'idx' ? it.i + 1 : sc.dim !== undefined ? it.dna[sc.dim] : (it.sv ?? it.i + 1);
+  const vs = ch.items.map(val).filter(v => v != null);
+  const min = Math.min(...vs), max = Math.max(...vs);
+  const f = v => max === min ? .5 : sc.log ? (Math.log(v) - Math.log(min)) / (Math.log(max) - Math.log(min)) : (v - min) / (max - min);
+  const inv = x => sc.log ? Math.exp(Math.log(min) + x * (Math.log(max) - Math.log(min))) : min + x * (max - min);
+  const text = (v, it) => it?.svt ? it.svt : sc.dim !== undefined ? `${(+v).toFixed(1).replace('.0', '')} מתוך 5 · ${word(sc.dim, v)}` : `${+(+v).toFixed(v < 10 ? 2 : 0)}${sc.unit ? ' ' + sc.unit : ''}`;
+  return { ...sc, val, f, inv, text, min, max };
+}
+
+// ================= כלים =================
 const app = document.getElementById('app');
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const lines = s => esc(s).split(/(?<=[.!?״"])\s+(?=\S)/).join('<br>');
 const src = id => !id ? '' : /^(https?:|data:)/.test(id) ? id : `img/${id}.jpg`;
 const pageSrc = n => `pages/p${String(n).padStart(3, '0')}.jpg`;
 const hash = s => [...String(s)].reduce((a, c) => (a * 31 + c.charCodeAt(0)) >>> 0, 7);
 const avg = items => DIMS.map((_, d) => items.reduce((s, it) => s + it.dna[d], 0) / items.length);
 const dist = (a, b) => Math.sqrt(a.reduce((s, v, i) => s + (v - b[i]) ** 2, 0));
-const word = (d, v) => v >= 4 ? DIMS[d].hi : v <= 2 ? DIMS[d].lo : 'איזון';
-const thumbStyle = (it, ch = it.ch) => it.img ? `background-image:url('${src(it.img)}')` : `background:${ch.color}`;
+function word(d, v) { return v >= 4 ? DIMS[d].hi : v <= 2 ? DIMS[d].lo : 'איזון'; }
+const thumbStyle = (it, ch = it.ch) => (USERIMG[it.id] || it.img) ? `background-image:url('${USERIMG[it.id] || src(it.img)}')` : `background:${ch.color}`;
 
-function resonances(it, n = 3) {
-  return ALL.filter(o => o.ch !== it.ch)
-    .map(o => ({ o, d: dist(it.dna, o.dna) + (hash(it.id + o.id) % 100) / 1000 }))
+// מה כל ממד אומר באדריכלות: אותן נוסחאות שבונות את החדר בסטודיו
+function arch(d) {
+  const [L, M, O, T, H] = d;
+  const sky = L >= 4 ? 35 + (L - 3) * 12 : L <= 2 ? 5 : 18;
+  return [
+    `פתח תקרה ${Math.round(sky)}% מהרוחב`,
+    `קיר בעובי ${Math.round((0.12 + M * 0.14) * 100)} ס״מ${M <= 2 ? ', מורם מהקרקע' : ''}`,
+    `גובה ${(2.5 + O * 0.45).toFixed(1)} מ׳, ${Math.max(0, Math.round(O) - 1)} פתחים בקיר`,
+    `${Math.round(T * 3)} עמודים בקצב, חדר באורך ${(6 + T * 2.6).toFixed(0)} מ׳`,
+    `${['גוונים קרירים', 'אפור קריר', 'ניטרלי', 'גוונים חמים', 'עץ ואדמה'][Math.min(4, Math.max(0, Math.round(H) - 1))]}`,
+  ];
+}
+
+function resonances(dna, exceptCh, n = 3, exceptId) {
+  return ALL.filter(o => o.ch !== exceptCh && o.id !== exceptId)
+    .map(o => ({ o, d: dist(dna, o.dna) + (hash(o.id) % 100) / 1000 }))
     .sort((a, b) => a.d - b.d).slice(0, n).map(({ o, d }) => {
-      const same = DIMS.map((_, k) => k).filter(k => it.dna[k] === o.dna[k] && it.dna[k] !== 3);
-      const rule = same.length ? same.slice(0, 3).map(k => word(k, it.dna[k])).join(', ') : 'פרופיל קרוב בכל חמשת הממדים';
-      return { o, d, rule };
+      const same = DIMS.map((_, k) => k).filter(k => Math.round(dna[k]) === o.dna[k] && o.dna[k] !== 3);
+      return { o, d, rule: same.length ? same.slice(0, 3).map(k => word(k, o.dna[k])).join(', ') : 'פרופיל קרוב בכל חמשת הממדים' };
     });
 }
 
-// ---------- תמונה חיה: בפרופורציה שלה, בלי חיתוך, לחיצה מגדילה ----------
-function live(srcId, mode, opt = {}) {
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('on');
+  clearTimeout(toast.k); toast.k = setTimeout(() => t.classList.remove('on'), 2200);
+}
+
+// ================= רכיבים =================
+function live(imgSrc, mode, opt = {}) {
   const el = document.createElement('div');
   el.className = 'live';
-  if (srcId) {
-    el.innerHTML = `<img class="blurbg" src="${src(srcId)}" alt="" aria-hidden="true"><img class="main" src="${src(srcId)}" alt="${esc(opt.alt || '')}">`;
-    el.classList.add('zoomable'); el.title = 'לחיצה מגדילה';
-    el.addEventListener('click', () => lightbox({ img: src(srcId), title: opt.alt, page: opt.page, color: opt.color }));
+  if (imgSrc) {
+    el.innerHTML = `<img class="blurbg" src="${imgSrc}" alt="" aria-hidden="true"><img class="main" src="${imgSrc}" alt="${esc(opt.alt || '')}">`;
+    el.classList.add('zoomable');
+    el.addEventListener('click', () => lightbox({ img: imgSrc, title: opt.alt, page: opt.page, color: opt.color }));
   }
   el.insertAdjacentHTML('beforeend', '<div class="grain"></div>');
-  if (mode) requestAnimationFrame(() => attachFx(el, mode, { ...opt, solo: !srcId }));
+  el.fx = attachFx(el, mode, { ...opt, solo: !imgSrc });
   return el;
 }
 
-// ---------- תיבת הגדלה ----------
-function lightbox({ img, title, page, color, html }) {
+function lightbox({ img, title, page, color, html, onClose }) {
   document.querySelector('.lb')?.remove();
   const lb = document.createElement('div');
   lb.className = 'lb'; lb.setAttribute('role', 'dialog'); lb.setAttribute('aria-modal', 'true');
   lb.style.setProperty('--c', color || '#141414');
   lb.innerHTML = `<div class="lb-in">
     <div class="lb-bar"><b>${esc(title || '')}</b>
-      <span class="lb-tools">${page ? `<button class="lnk" data-page="${page}">הדף המקורי בספר (עמ׳ ${page})</button>` : ''}
-      <button class="x" aria-label="סגירה" title="סגירה (Esc)">✕</button></span></div>
+      <span class="lb-tools">${page ? `<button class="lnk" data-page="${page}">הדף המקורי בספר, עמוד ${page}</button>` : ''}
+      <button class="x" data-d="סגירה. גם Esc או לחיצה ברקע">סגירה</button></span></div>
     <div class="lb-body">${html || `<img src="${img}" alt="${esc(title || '')}">`}</div></div>`;
   document.body.appendChild(lb);
-  const close = () => { lb.remove(); document.removeEventListener('keydown', onKey); };
+  const close = () => { lb.remove(); document.removeEventListener('keydown', onKey); onClose?.(); };
   const onKey = e => { if (e.key === 'Escape') close(); };
   document.addEventListener('keydown', onKey);
   lb.addEventListener('click', e => {
@@ -75,41 +112,82 @@ function lightbox({ img, title, page, color, html }) {
   });
   const im = lb.querySelector('.lb-body img');
   if (im) im.onload = () => im.style.setProperty('--nw', im.naturalWidth);
+  return { close };
 }
 
-// ---------- גרף עכביש: המרחב ותהודותיו ----------
-function radar(series, size = 220) {
-  const c = size / 2, R = size / 2 - 30, n = DIMS.length;
+// גרף עכביש. editable: גוררים את הנקודות של הסדרה הראשית.
+function radar(series, { size = 230, editable = false, labels = true } = {}) {
+  const c = size / 2, R = size / 2 - 32, n = DIMS.length;
   const pt = (k, v) => { const a = -Math.PI / 2 + k * 2 * Math.PI / n; return [c + Math.cos(a) * R * v / 5, c + Math.sin(a) * R * v / 5]; };
   const poly = vals => vals.map((v, k) => pt(k, v).join(',')).join(' ');
-  return `<svg class="radar" viewBox="0 0 ${size} ${size}" role="img" aria-label="גרף עכביש של חמשת הממדים">
+  const main = series.find(s => s.main);
+  return `<svg class="radar ${editable ? 'edit' : ''}" viewBox="0 0 ${size} ${size}" data-size="${size}" role="img" aria-label="גרף עכביש של חמשת הממדים">
     ${[1, 2, 3, 4, 5].map(l => `<polygon points="${poly(Array(n).fill(l))}" fill="none" stroke="#e6e2da" stroke-width="${l === 5 ? 1.2 : .8}"/>`).join('')}
-    ${DIMS.map((d, k) => { const [x, y] = pt(k, 5), [lx, ly] = pt(k, 6.15); return `<line x1="${c}" y1="${c}" x2="${x}" y2="${y}" stroke="#e6e2da"/><text x="${lx}" y="${ly + 4}" text-anchor="middle" class="rl">${d.k}</text>`; }).join('')}
-    ${series.slice().reverse().map(s => `<polygon points="${poly(s.vals)}" fill="${hexA(s.color, s.main ? .28 : .14)}" stroke="${s.color}" stroke-width="${s.main ? 2.4 : 1.4}" ${s.main ? '' : 'stroke-dasharray="4 3"'}/>`).join('')}
+    ${DIMS.map((d, k) => { const [x, y] = pt(k, 5), [lx, ly] = pt(k, 6.2); return `<line x1="${c}" y1="${c}" x2="${x}" y2="${y}" stroke="#e6e2da"/>${labels ? `<text x="${lx}" y="${ly + 4}" text-anchor="middle" class="rl">${d.k}</text>` : ''}`; }).join('')}
+    <circle cx="${c}" cy="${c}" r="2.5" fill="#999"/>
+    ${series.filter(s => !s.main).map(s => `<polygon points="${poly(s.vals)}" fill="${hexA(s.color, .1)}" stroke="${s.color}" stroke-width="1.4" stroke-dasharray="4 3"/>`).join('')}
+    ${main ? `<polygon class="mainp" points="${poly(main.vals)}" fill="${hexA(main.color, .26)}" stroke="${main.color}" stroke-width="2.4"/>` : ''}
+    ${editable && main ? main.vals.map((v, k) => { const [x, y] = pt(k, v); return `<circle class="hdl" data-k="${k}" cx="${x}" cy="${y}" r="8" fill="#fff" stroke="${main.color}" stroke-width="2.5"/>`; }).join('') : ''}
   </svg>`;
 }
-
-function fxOpts(ch, it) {
-  const o = { color: ch.color, name: it?.name, id: it?.id, dna: it?.dna, sub: it?.sub, g: it?.g, alt: it ? it.name : ch.title, page: it ? it.page : null };
-  if (it?.hz) o.hz = it.hz;
-  if (it?.glow) o.glow = it.glow;
-  if (ch.id === 'sefirot' && it) o.idx = it.i;
-  if (ch.id === 'numbers' && it) o.n = it.i + 1;
-  return o;
-}
-function fxMode(ch, it) {
-  if (it?.id === 'prime') return 'prime';
-  if (it?.id === 'fractal') return 'fractal';
-  if (it?.id === 'saudade') return 'saudade';
-  return ch.motion;
-}
-function toast(msg) {
-  const t = document.getElementById('toast');
-  t.textContent = msg; t.classList.add('on');
-  clearTimeout(toast.k); toast.k = setTimeout(() => t.classList.remove('on'), 2200);
+function bindRadar(svgEl, vals, color, onChange) {
+  const size = +svgEl.dataset.size, c = size / 2, R = size / 2 - 32, n = DIMS.length;
+  let k = null;
+  const toVal = e => {
+    const r = svgEl.getBoundingClientRect(), sx = size / r.width;
+    const x = (e.clientX - r.left) * sx - c, y = (e.clientY - r.top) * sx - c;
+    const a = -Math.PI / 2 + k * 2 * Math.PI / n;
+    const proj = x * Math.cos(a) + y * Math.sin(a);
+    return Math.max(1, Math.min(5, Math.round((proj / R) * 5 * 2) / 2));
+  };
+  svgEl.addEventListener('pointerdown', e => { const h = e.target.closest('.hdl'); if (!h) return; k = +h.dataset.k; svgEl.setPointerCapture(e.pointerId); e.preventDefault(); });
+  svgEl.addEventListener('pointermove', e => { if (k === null) return; const v = toVal(e); if (v !== vals[k]) { vals[k] = v; onChange(vals.slice(), true); } });
+  svgEl.addEventListener('pointerup', () => { if (k !== null) { k = null; onChange(vals.slice(), false); } });
 }
 
-// ---------- שער ----------
+// ================= סרגלי ניווט קבועים =================
+const NAV = { view: 'home', ch: null, it: null, collapsed: false };
+function chapterBar() {
+  const el = document.getElementById('chbar');
+  const i = CHAPTERS.indexOf(NAV.ch);
+  const prev = CHAPTERS[(i - 1 + CHAPTERS.length) % CHAPTERS.length], next = CHAPTERS[(i + 1) % CHAPTERS.length];
+  el.innerHTML = `
+    <a class="step" href="${chHref(i >= 0 ? prev : CHAPTERS[CHAPTERS.length - 1])}" data-d="הפרק הקודם">‹</a>
+    <div class="chs">${CHAPTERS.map(c => `<a href="${chHref(c)}" data-ch="${c.id}" class="${c === NAV.ch ? 'on' : ''} ${NAV.view === 'atlas' && atlasState.on.size && !atlasState.on.has(c.id) ? 'off' : ''}" style="--c:${c.color}" title="${esc(c.title)}"><b>${c.n}</b>${c.lens}</a>`).join('')}</div>
+    <a class="step" href="${chHref(i >= 0 ? next : CHAPTERS[0])}" data-d="הפרק הבא">›</a>`;
+}
+function chHref(c) {
+  if (NAV.view === 'studio') return `#/studio/${c.items[0].id}`;
+  if (NAV.view === 'atlas') return `#/atlas/ch:${c.id}`;
+  if (NAV.view === 'c' && c === NAV.ch && !NAV.it) return `#/c/${c.id}/~`;
+  return `#/c/${c.id}`;
+}
+function exampleRow() {
+  const el = document.getElementById('exrow');
+  const ch = NAV.ch;
+  const show = ch && (NAV.view === 'c' || NAV.view === 'studio') && !NAV.collapsed;
+  el.hidden = !show;
+  document.body.classList.toggle('has-ex', !!show);
+  if (!show) return;
+  const base = NAV.view === 'studio' ? '#/studio/' : `#/c/${ch.id}/`;
+  const seq = NAV.view === 'studio' ? ch.items : [null, ...ch.items];
+  const pos = seq.indexOf(NAV.it ?? null);
+  const href = x => x ? base + x.id : `#/c/${ch.id}`;
+  const prev = seq[pos - 1], next = seq[pos + 1];
+  el.style.setProperty('--c', ch.color);
+  el.innerHTML = `
+    <a class="step ${pos <= 0 ? 'dis' : ''}" href="${pos > 0 ? href(prev) : '#'}" data-d="הדוגמה הקודמת">‹</a>
+    <div class="exs">
+      ${NAV.view === 'c' ? `<a href="#/c/${ch.id}" class="gate ${!NAV.it ? 'on' : ''}"><i>${ch.n}</i><span>שער הפרק</span></a>` : ''}
+      ${ch.items.map(x => `<a href="${base}${x.id}" class="${x === NAV.it ? 'on' : ''}"><i class="th" style="${thumbStyle(x, ch)}"><b>${x.i + 1}</b></i><span>${esc(x.name)}</span></a>`).join('')}
+      ${NAV.view === 'c' ? (ch.closed ? `<span class="closed" data-d="${esc(`סדרה סגורה: ${ch.items.length} פריטים בטבע, אין מה להוסיף. דוגמה: שבעה תווים בסולם.`)}">סדרה סגורה</span>` : `<button class="addx" id="addBtn" data-d="מוסיפים מושג חדש לפרק, עם פרומפט ותמונה. דוגמה: מילה מעוד שפה.">הוספת דוגמה</button>`) : ''}
+    </div>
+    <a class="step ${pos >= seq.length - 1 ? 'dis' : ''}" href="${pos < seq.length - 1 ? href(next) : '#'}" data-d="הדוגמה הבאה">›</a>`;
+  el.querySelector('.on')?.scrollIntoView({ inline: 'nearest', block: 'nearest' });
+  NAV.keys = { prev: pos > 0 ? href(prev) : null, next: pos < seq.length - 1 ? href(next) : null };
+}
+
+// ================= שער =================
 function viewHome() {
   app.innerHTML = `
   <section class="view home">
@@ -117,415 +195,503 @@ function viewHome() {
       <div class="hero-text reveal">
         <div class="kicker">${BOOK.author} · ${BOOK.date} · גיליון 1</div>
         <h1>${BOOK.title}</h1>
-        <p class="thesis">${BOOK.thesis}</p>
+        <p class="thesis">${lines(BOOK.thesis)}</p>
         <p class="insight"><span class="mk">${BOOK.insight}</span></p>
-        <div class="dims">${DIMS.map(d => `<span>${d.k}</span>`).join('')}</div>
-        <p class="meta">12 תחומים · ${ALL.length} מרחבים · ספר מגזינים על אדריכלות ובינה מלאכותית</p>
+        <div class="dims">${DIMS.map(d => `<span data-d="${d.lo} עד ${d.hi}">${d.k}</span>`).join('')}</div>
+        <p class="meta">${CHAPTERS.length} פרקים<br>${ALL.length} דוגמאות</p>
         <div class="row">
-          <a class="btn primary" href="#/c/yesodot">לפתוח את הספר</a>
-          <a class="btn" href="#/atlas">כל המרחבים יחד</a>
-          <a class="btn" href="#/pages/1">דפי הספר המקורי</a>
+          <a class="btn primary" href="#/c/math" data-d="מתחילים בפרק הראשון, מתמטיקה">לפתוח את הספר</a>
+          <a class="btn" href="#/atlas" data-d="כל הדוגמאות על צירים משותפים">אטלס</a>
+          <a class="btn" href="#/pages/1" data-d="189 העמודים כמו שהם בקנבה">דפי הספר המקורי</a>
         </div>
       </div>
       <div class="hero-art" id="heroArt"></div>
     </div>
-    <div class="shelf">
-      <div class="shelf-head"><h2>12 עדשות, שאלה אחת</h2><span class="muted small">${BOOK.question}</span></div>
-      <div class="chapters">${CHAPTERS.map(c => `
+    <div class="shelf"><div class="chapters">${CHAPTERS.map(c => `
         <a class="ch-card" href="#/c/${c.id}" style="--c:${c.color}" title="${esc(c.thesis)}">
           <img src="${src(c.cover)}" alt="" loading="lazy"><div class="shade"></div><div class="band"></div>
-          <div class="t"><div class="num">${c.n}</div><div class="lens">${c.lens}</div><div class="ttl">${c.title}</div></div>
-        </a>`).join('')}</div>
-    </div>
+          <div class="t"><div class="num">${c.n}</div><div class="ttl">${c.lens}</div></div>
+        </a>`).join('')}</div></div>
   </section>`;
   const art = document.getElementById('heroArt');
-  [['p084', 'axis', { id: 'christianity', alt: 'נצח' }], ['p045', 'glow', { id: 'xe', glow: '#5a6cff', alt: 'קסנון' }], ['p033', 'string', { hz: 440, alt: 'לה' }]]
-    .forEach(([f, m, o]) => art.appendChild(live(f, m, { color: '#f2d544', page: parseInt(f.slice(1), 10), ...o })));
+  [['p084', 'axis', 'נצח'], ['p045', 'glow', 'קסנון'], ['p033', 'string', 'לה']].forEach(([f, m, alt]) =>
+    art.appendChild(live(src(f), m, { color: '#f2d544', glow: '#5a6cff', sv: 440, frac: .6, alt, page: parseInt(f.slice(1), 10), gauge: false })));
 }
 
-// ---------- פרק ----------
-function viewChapter(cid, iid) {
-  const ch = CH[cid] || CHAPTERS[0];
-  const it = iid ? byId[iid] : null;
-  const seq = [];
-  CHAPTERS.forEach(c => { seq.push({ c, it: null }); c.items.forEach(x => seq.push({ c, it: x })); });
-  const pos = seq.findIndex(s => s.c === ch && s.it === it);
-  const prev = seq[pos - 1], next = seq[pos + 1];
-  const href = s => s ? (s.it ? `#/c/${s.c.id}/${s.it.id}` : `#/c/${s.c.id}`) : '#/';
-  const lab = s => s ? (s.it ? s.it.name : `פרק ${s.c.n}: ${s.c.title}`) : 'לשער';
-  const first = !document.querySelector('.chapter') || document.querySelector('.chapter').dataset.ch !== ch.id;
-  let groups = [{ g: null, items: ch.items.filter(x => !x.custom) }];
-  if (ch.groups) groups = ch.groups.map(g => ({ g, items: ch.items.filter(x => x.g === g && !x.custom) }));
-  const mine = ch.items.filter(x => x.custom);
-  if (mine.length) groups.push({ g: 'נוספו על ידך', items: mine });
-
-  const tocHTML = `
-    <div class="toc-head">
-      <select id="chSel" aria-label="בחירת פרק">${CHAPTERS.map(c => `<option value="${c.id}" ${c === ch ? 'selected' : ''}>${c.n}. ${c.lens}: ${c.title}</option>`).join('')}</select>
-      <div class="sortnote">${ch.items.length} מרחבים, לפי סדר הספר${ch.groups ? ', מקובצים לפי תופעה' : ''}</div>
-    </div>
-    <div class="toc-list">
-      <a href="#/c/${ch.id}" class="intro ${!it ? 'on' : ''}"><span class="th">${ch.n}</span><span><span class="nm">שער הפרק</span><span class="sb">${ch.lens}</span></span></a>
-      ${groups.map(gr => `${gr.g ? `<div class="toc-group">${gr.g}</div>` : ''}${gr.items.map(x => `
-        <a href="#/c/${ch.id}/${x.id}" class="${x === it ? 'on' : ''}">
-          <span class="th" style="${thumbStyle(x, ch)}"><i class="no">${x.i + 1}</i></span>
-          <span><span class="nm">${esc(x.name)}</span><span class="sb">${esc(x.sub)}</span></span>
-        </a>`).join('')}`).join('')}
-      ${ch.closed ? `<div class="closed-note">סדרה סגורה: ${ch.items.length} פריטים בטבע, אין מה להוסיף.</div>` : `<button class="add-btn" id="addBtn">הוספת מרחב לפרק</button>`}
-    </div>`;
-
-  const copy = it ? `
-    <div class="crumb">פרק ${ch.n} · ${ch.lens} · מרחב ${it.i + 1} מתוך ${ch.items.length}</div>
-    <h1>${esc(it.name)}</h1>
-    <div class="sub"><span class="lat">${esc(it.sub)}</span></div>
-    <p class="ins"><span class="mk">${esc(it.insight)}</span></p>
-    <div><div class="lab">המרחב</div><p>${esc(it.space)}</p></div>
-    ${it.quote ? (it.haiku ? `<div><div class="lab">הייקו מתוך הספר</div><div class="haiku">${esc(it.quote).replace(/ \/ /g, '\n')}</div></div>`
-      : `<blockquote class="quote">${esc(it.quote)}<cite>${it.custom ? 'נוסף על ידך' : `מתוך "${BOOK.title}", ${BOOK.date}`}</cite></blockquote>`) : ''}
-    ${it.tip ? `<div class="tip"><b>טיפ ביצוע:</b> ${esc(it.tip)}</div>` : ''}
-    <div class="meta-row">
-      ${it.page ? `<button class="lnk" data-page="${it.page}">הדף המקורי בספר · עמ׳ ${it.page}</button>` : ''}
-      <span class="muted small">${it.page ? 'הדמיית AI מתוך הספר' : it.custom ? 'נוסף על ידך' : 'הדמיית מודל שנבנה מה-DNA'}</span>
-      ${it.custom ? `<button class="lnk" id="delCustom">מחיקת המרחב</button>` : ''}
-    </div>`
-    : `
-    <div class="crumb">פרק ${ch.n} · ${ch.lens}</div>
-    <h1>${esc(ch.title)}</h1>
-    <p class="ins"><span class="mk">${esc(ch.thesis)}</span></p>
-    <p>${esc(ch.lead)}</p>
-    <blockquote class="quote">${esc(ch.quote)}<cite>מתוך "${BOOK.title}", ${BOOK.date}</cite></blockquote>
-    <div class="meta-row"><button class="lnk" data-page="${parseInt(ch.cover.slice(1), 10)}">שער הפרק בספר המקורי</button></div>`;
-
-  const vals = it ? it.dna : avg(ch.items);
-  const res = it ? resonances(it) : [];
-  const chRes = !it ? CHAPTERS.filter(c => c !== ch).map(c => ({ c, d: dist(avg(c.items), vals) })).sort((a, b) => a.d - b.d)[0] : null;
-  const series = [{ vals, color: ch.color, main: true }, ...res.map(r => ({ vals: r.o.dna, color: r.o.ch.color }))];
-  const sideHTML = `
-    <div><h3>${it ? 'ה-DNA של המרחב, ותהודותיו' : 'ה-DNA הממוצע של הפרק'}</h3>
-      <p class="why">קו מלא: ${it ? 'המרחב' : 'הפרק'}. קו מקווקו: מרחבים קרובים מתחומים אחרים, בצבע התחום שלהם. קריאה פרשנית, 1 עד 5.</p>
-      ${radar(series)}
-      <div class="dna-nums">${DIMS.map((d, k) => `<span><b>${d.k}</b> ${(+vals[k]).toFixed(vals[k] % 1 ? 1 : 0)}</span>`).join('')}</div></div>
-    ${it ? `<div><h3>תהודות מתחומים אחרים</h3>
-      <div class="res">${res.map(r => `
-        <a href="#/c/${r.o.ch.id}/${r.o.id}" style="--c:${r.o.ch.color}">
-          <span class="th" style="${thumbStyle(r.o)}"></span>
-          <span><span class="ch">${r.o.ch.lens}</span><div class="nm">${esc(r.o.name)}</div><div class="rule">משותף: ${esc(r.rule)}</div></span>
-        </a>`).join('')}</div>
-      <p class="why">הכלל: אותו DNA בשפה אחרת. התובנה: אותו חדר חוזר בכמה תחומים. היישום: להציב אותם זה מול זה.</p></div>`
-      : `<div><h3>הפרק הקרוב ביותר</h3>
-      <div class="res"><a href="#/c/${chRes.c.id}" style="--c:${chRes.c.color}"><span class="th" style="background-image:url(${src(chRes.c.cover)})"></span>
-      <span><span class="ch">${chRes.c.lens}</span><div class="nm">${chRes.c.title}</div><div class="rule">${esc(chRes.c.thesis)}</div></span></a></div></div>`}
-    <div class="side-actions"><a class="btn" href="#/studio/${it ? it.id : ch.items[0].id}">החדר בתלת־ממד</a><a class="btn" href="#/atlas/${it ? it.id : ''}">באטלס</a></div>`;
-
-  if (first) {
-    app.innerHTML = `
-    <section class="view chapter" data-ch="${ch.id}" style="--c:${ch.color}">
-      <aside class="toc" id="toc"></aside>
-      <div class="stage">
-        <div class="spread"><div id="art" class="live"></div><article class="copy" id="copy"></article></div>
-        <div class="pager">
-          <a class="btn quiet prev" id="prevB"></a>
-          <div class="pos"><span id="posT"></span><div class="bar-pos"><i id="posI"></i></div></div>
-          <a class="btn quiet next" id="nextB"></a>
+// ================= פרק: שער עם סולם התורה =================
+function viewGate(ch) {
+  const sc = scaleOf(ch);
+  const sorted = [...ch.items].sort((a, b) => sc.val(a) - sc.val(b));
+  const vs = sorted.map(sc.val);
+  app.innerHTML = `
+  <section class="view gate" style="--c:${ch.color}">
+    <div class="dial">
+      <div class="dial-stage" id="dstage"></div>
+      <div class="dial-ctl">
+        <div class="tool-h">הסולם של התורה: <b>${esc(sc.label)}</b></div>
+        <div class="scale-wrap">
+          <input type="range" id="dial" min="0" max="1000" value="0" aria-label="${esc(sc.label)}">
+          <div class="ticks">${sorted.map((it, k) => `<button class="tick" data-k="${k}" style="right:${sc.f(vs[k]) * 100}%" data-d="${esc(it.name)}: ${esc(sc.text(vs[k], it))}"><i style="${thumbStyle(it, ch)}"></i></button>`).join('')}</div>
         </div>
+        <div class="strips">${DIMS.map((d, k) => `<div class="strip-row"><span>${d.k}</span><div class="grad" style="background:linear-gradient(to left, ${sorted.map((it, j) => `${hexA(ch.color, .12 + it.dna[k] / 5 * .85)} ${sc.f(vs[j]) * 100}%`).join(', ')})"><i class="cursor"></i></div><em id="sv${k}"></em></div>`).join('')}</div>
+        <p class="tool-note">מזיזים את הסולם.<br>כל פס הוא ממד אדריכלי, וצבעו מתחזק ככל שהערך עולה.<br>בין שתי דוגמאות, הערכים מחושבים ביניהן.</p>
       </div>
-      <aside class="side" id="side"></aside>
-    </section>`;
-    const sec = app.querySelector('.chapter');
-    sec.addEventListener('change', e => { if (e.target.id === 'chSel') location.hash = `#/c/${e.target.value}`; });
-    sec.addEventListener('click', e => {
-      const p = e.target.closest('[data-page]');
-      if (p) lightbox({ img: pageSrc(+p.dataset.page), title: `עמוד ${p.dataset.page} בספר המקורי` });
-      if (e.target.id === 'addBtn') addExample(CH[sec.dataset.ch]);
-      if (e.target.id === 'delCustom') delCustom(location.hash.split('/')[3]);
-    });
+    </div>
+    <article class="copy">
+      <div class="crumb">פרק ${ch.n} · ${ch.lens}</div>
+      <h1>${esc(ch.title)}</h1>
+      <p class="ins"><span class="mk">${esc(ch.thesis)}</span></p>
+      <p class="body">${lines(ch.lead)}</p>
+      <blockquote class="quote">${lines(ch.quote)}<cite>${ch.id === 'math' ? 'מתוך המאמר הפותח של הספר' : `מתוך "${BOOK.title}"`}</cite></blockquote>
+      <div class="near" id="near"></div>
+      <div class="row"><a class="btn" id="toStudio" data-d="פותח את החדר שמתאים לנקודה בסולם">החדר בנקודה הזו, בתלת־ממד</a>
+      <button class="btn" data-page="${parseInt(ch.cover.slice(1), 10)}" data-d="העמוד בספר המקורי">הדף בספר</button></div>
+    </article>
+    <aside class="side">
+      <div><h3>העכביש של הפרק</h3><p class="why">קו מלא: הממוצע של הפרק.<br>מקווקו: כל דוגמה בפרק.</p>
+      ${radar([{ vals: avg(ch.items), color: ch.color, main: true }, ...ch.items.map(it => ({ vals: it.dna, color: ch.color }))])}</div>
+      <div><h3>הדוגמאות לפי הסולם</h3><ol class="order">${sorted.map((it, k) => `<li><a href="#/c/${ch.id}/${it.id}"><b>${esc(sc.text(vs[k], it))}</b> ${esc(it.name)}</a></li>`).join('')}</ol></div>
+    </aside>
+  </section>`;
+  const stage = document.getElementById('dstage');
+  const lv = live(null, ch.motion, { color: ch.color, label: sc.label, glow: sorted[0].glow });
+  stage.appendChild(lv);
+  const dial = document.getElementById('dial');
+  function at(x) {
+    const v = sc.inv(x);
+    let j = vs.findIndex(u => u >= v); if (j <= 0) j = Math.max(1, j === -1 ? vs.length - 1 : 1);
+    const a = sorted[j - 1], b = sorted[j], fa = sc.f(vs[j - 1]), fb = sc.f(vs[j]);
+    const t = fb === fa ? 0 : Math.max(0, Math.min(1, (x - fa) / (fb - fa)));
+    const dna = a.dna.map((p, k) => p + (b.dna[k] - p) * t);
+    const near = t < .5 ? a : b;
+    return { v, dna, near, t, a, b };
   }
-  document.getElementById('toc').innerHTML = tocHTML;
-  const copyEl = document.getElementById('copy');
-  copyEl.innerHTML = copy; copyEl.scrollTop = 0;
-  copyEl.classList.remove('flash'); void copyEl.offsetWidth; copyEl.classList.add('flash');
-  document.getElementById('side').innerHTML = sideHTML;
-  const imgId = it ? it.img : ch.cover;
-  const nl = live(imgId, fxMode(ch, it), { ...fxOpts(ch, it), page: it ? it.page : parseInt(ch.cover.slice(1), 10) });
-  nl.id = 'art'; document.getElementById('art').replaceWith(nl);
-  const nb = document.getElementById('nextB'), pb = document.getElementById('prevB');
-  nb.href = href(next); nb.textContent = `הבא: ${lab(next)}`; nb.title = lab(next);
-  pb.href = href(prev); pb.textContent = `הקודם: ${lab(prev)}`; pb.title = lab(prev);
-  document.getElementById('posT').textContent = `${pos + 1} מתוך ${seq.length}`;
-  document.getElementById('posI').style.width = `${((pos + 1) / seq.length) * 100}%`;
-  document.querySelector('.toc a.on')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-  viewChapter.keys = { next: href(next), prev: href(prev) };
+  function upd() {
+    const x = +dial.value / 1000, r = at(x);
+    lv.fx.set({ sv: r.v, frac: x, dna: r.dna, valueText: sc.text(r.v, (Math.abs(sc.f(sc.val(r.near)) - x) < .01) ? r.near : null), glow: r.near.glow });
+    const A = arch(r.dna);
+    DIMS.forEach((d, k) => { document.getElementById(`sv${k}`).textContent = `${r.dna[k].toFixed(1)} · ${A[k]}`; });
+    app.querySelectorAll('.strip-row .cursor').forEach(c => { c.style.right = `${x * 100}%`; });
+    document.getElementById('near').innerHTML = `<div class="lab">הנקודה בסולם</div><p class="body">בין <a href="#/c/${ch.id}/${r.a.id}">${esc(r.a.name)}</a> ל<a href="#/c/${ch.id}/${r.b.id}">${esc(r.b.name)}</a>.<br>הקרובה ביותר: <b>${esc(r.near.name)}</b>, ${esc(r.near.insight)}</p>`;
+    document.getElementById('toStudio').href = `#/studio/${r.near.id}?dna=${r.dna.map(v => Math.round(v * 2) / 2).join(',')}`;
+  }
+  dial.addEventListener('input', upd);
+  app.querySelector('.ticks').addEventListener('click', e => { const t = e.target.closest('.tick'); if (!t) return; dial.value = sc.f(vs[+t.dataset.k]) * 1000; upd(); });
+  app.querySelector('[data-page]').addEventListener('click', e => lightbox({ img: pageSrc(+e.currentTarget.dataset.page), title: 'שער הפרק בספר המקורי' }));
+  // הסולם זז לאט לבד, עד שנוגעים בו
+  let auto = true, x = 0;
+  dial.addEventListener('pointerdown', () => { auto = false; });
+  (function tick() { if (!dial.isConnected || !auto) return; x = (x + .0016) % 1.0001; dial.value = Math.round((.5 - .5 * Math.cos(x * Math.PI * 2)) * 1000); upd(); requestAnimationFrame(tick); })();
+  upd();
 }
 
-// ---------- הוספת מרחב ----------
+// ================= פרק: דוגמה =================
+function viewItem(ch, it) {
+  const sc = scaleOf(ch), v = sc.val(it);
+  const res = resonances(it.dna, ch, 3, it.id);
+  const A = arch(it.dna);
+  const prompt = `${it.name}: ${it.insight}`;
+  const en = `${enPrompt(it.name, it.space, it.dna)} --ar 1:1 --style raw --no text, words, writing, frame divisions`;
+  app.innerHTML = `
+  <section class="view item" style="--c:${ch.color}">
+    <div class="stage-img" id="art"></div>
+    <article class="copy" id="copy">
+      <div class="crumb">פרק ${ch.n} · ${ch.lens} · דוגמה ${it.i + 1} מתוך ${ch.items.length}</div>
+      <h1>${esc(it.name)}</h1>
+      <div class="sub"><span class="lat">${esc(it.sub)}</span></div>
+      <p class="ins"><span class="mk">${esc(it.insight)}</span></p>
+      <div class="params">
+        <div class="prm scale"><b>${esc(sc.label)}</b><span>${esc(sc.text(v, it))}</span></div>
+        ${DIMS.map((d, k) => `<div class="prm"><b>${d.k}</b><span>${word(k, it.dna[k])} (${it.dna[k]})</span><em>${A[k]}</em></div>`).join('')}
+      </div>
+      <div><div class="lab">המרחב</div><p class="body">${lines(it.space)}</p></div>
+      ${it.quote ? (it.haiku ? `<div><div class="lab">הייקו מתוך הספר</div><div class="haiku">${esc(it.quote).replace(/ \/ /g, '\n')}</div></div>`
+        : `<blockquote class="quote">${lines(it.quote)}<cite>${it.custom ? 'נוסף על ידך' : it.src === 'new' ? 'דוגמה חדשה, לא מתוך הספר' : `מתוך "${BOOK.title}"`}</cite></blockquote>`) : ''}
+      ${it.tip ? `<div class="tip"><b>טיפ ביצוע:</b> ${lines(it.tip)}</div>` : ''}
+      <div class="mine">
+        <div class="lab">הפרומפט, והתמונה שלך</div>
+        <div class="prompt"><b>${esc(prompt)}</b><span class="en">${esc(en)}</span></div>
+        <div class="row"><button class="btn" id="cpP" data-d="מעתיק את הפרומפט. מדביקים במידג׳רני, ואת התמונה שיוצאת מחזירים למסגרת כאן">העתקת הפרומפט</button></div>
+        <figure class="drop" id="drop" tabindex="0" data-d="מדביקים (Ctrl+V), גוררים או בוחרים קובץ">
+          ${USERIMG[it.id] ? `<img src="${USERIMG[it.id]}" alt="${esc(it.name)}">` : `<span>הדבקה, גרירה או <label class="lnk">בחירת קובץ<input type="file" accept="image/*" hidden id="upl"></label></span>`}
+          <figcaption>${esc(it.insight)}</figcaption>
+        </figure>
+        ${USERIMG[it.id] ? `<button class="lnk" id="rmImg">הסרת התמונה שלי</button>` : ''}
+      </div>
+      <div class="src-row">${it.page ? `<button class="lnk" data-page="${it.page}">הדף המקורי בספר, עמוד ${it.page}</button>` : ''}<span>${it.page ? 'הדמיית AI מתוך הספר' : it.custom ? 'נוסף על ידך' : 'הדמיה שנבנתה מהמודל התלת־ממדי'}</span>${it.custom ? `<button class="lnk" id="delCustom">מחיקת הדוגמה</button>` : ''}</div>
+    </article>
+    <aside class="side">
+      <div><h3>העכביש: הדוגמה ותהודותיה</h3><p class="why">קו מלא: הדוגמה.<br>מקווקו: קרובות מתחומים אחרים, בצבע התחום שלהן.</p>
+        ${radar([{ vals: it.dna, color: ch.color, main: true }, ...res.map(r => ({ vals: r.o.dna, color: r.o.ch.color }))])}</div>
+      <div><h3>תהודות מתחומים אחרים</h3>
+        <div class="res">${res.map(r => `
+          <a href="#/c/${r.o.ch.id}/${r.o.id}" style="--c:${r.o.ch.color}">
+            <span class="th" style="${thumbStyle(r.o)}"></span>
+            <span><span class="ch">${r.o.ch.lens}</span><div class="nm">${esc(r.o.name)}</div><div class="rule">משותף: ${esc(r.rule)}</div></span>
+          </a>`).join('')}</div></div>
+      <div class="row"><a class="btn" href="#/studio/${it.id}" data-d="החדר שנבנה מחמשת הממדים, עם מכוונים">תלת־ממד</a><a class="btn" href="#/atlas/${it.id}" data-d="הדוגמה בין כל הדוגמאות">באטלס</a></div>
+    </aside>
+  </section>`;
+  const img = USERIMG[it.id] || src(it.img);
+  document.getElementById('art').appendChild(live(img, ch.motion, { color: ch.color, alt: it.name, page: it.page, sv: v, frac: sc.f(v), dna: it.dna, glow: it.glow, label: sc.label, valueText: sc.text(v, it) }));
+  const sec = app.querySelector('.item');
+  sec.addEventListener('click', e => {
+    const p = e.target.closest('[data-page]');
+    if (p) lightbox({ img: pageSrc(+p.dataset.page), title: `${it.name} · עמוד ${p.dataset.page}`, color: ch.color });
+    if (e.target.id === 'delCustom') delCustom(it.id);
+    if (e.target.id === 'rmImg') { delete USERIMG[it.id]; lsSet(LSI, USERIMG); route(); }
+  });
+  document.getElementById('cpP').onclick = () => navigator.clipboard?.writeText(`${prompt}\n${en}`).then(() => toast('הפרומפט הועתק'), () => toast('ההעתקה נחסמה בדפדפן'));
+  bindDrop(document.getElementById('drop'), it);
+}
+
+function bindDrop(drop, it) {
+  const take = file => {
+    if (!file || !file.type.startsWith('image/')) return;
+    const r = new FileReader();
+    r.onload = () => {
+      const im = new Image();
+      im.onload = () => {
+        const s = Math.min(1, 1024 / Math.max(im.width, im.height)), c = document.createElement('canvas');
+        c.width = Math.round(im.width * s); c.height = Math.round(im.height * s);
+        c.getContext('2d').drawImage(im, 0, 0, c.width, c.height);
+        USERIMG[it.id] = c.toDataURL('image/jpeg', .86);
+        if (!lsSet(LSI, USERIMG)) { toast('אין מקום בדפדפן לתמונה נוספת'); return; }
+        toast('התמונה נשמרה במסגרת'); route();
+      };
+      im.src = r.result;
+    };
+    r.readAsDataURL(file);
+  };
+  drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('over'); });
+  drop.addEventListener('dragleave', () => drop.classList.remove('over'));
+  drop.addEventListener('drop', e => { e.preventDefault(); drop.classList.remove('over'); take(e.dataTransfer.files[0]); });
+  drop.addEventListener('paste', e => { const f = [...e.clipboardData.items].find(x => x.type.startsWith('image/')); if (f) take(f.getAsFile()); });
+  document.getElementById('upl')?.addEventListener('change', e => take(e.target.files[0]));
+  drop.addEventListener('click', e => { if (drop.querySelector('img') && !e.target.closest('label')) lightbox({ img: drop.querySelector('img').src, title: it.insight, color: it.ch.color }); });
+}
+
+// ================= הוספת דוגמה =================
 function enPrompt(name, space, dna) {
-  const [L, M, O, T, H] = dna;
-  const w = [['dim single light slit', 'soft dusk light', 'balanced daylight', 'bright daylight', 'full open midday light'][L - 1],
-    ['floating light structure', 'thin light frame', 'medium walls', 'thick stone walls', 'heavy rammed earth and concrete mass'][M - 1],
-    ['enclosed protected room', 'one narrow opening', 'balanced openings', 'open facade', 'open to the horizon on all sides'][O - 1],
-    ['still and silent', 'slow rhythm', 'calm rhythm', 'flowing path', 'continuous movement'][T - 1],
-    ['cool tones', 'cool grey', 'neutral', 'warm tones', 'warm wood and earth'][H - 1]];
+  const r = (k) => Math.min(4, Math.max(0, Math.round(dna[k]) - 1));
+  const w = [['dim single light slit', 'soft dusk light', 'balanced daylight', 'bright daylight', 'full open midday light'][r(0)],
+    ['floating light structure', 'thin light frame', 'medium walls', 'thick stone walls', 'heavy rammed earth and concrete mass'][r(1)],
+    ['enclosed protected room', 'one narrow opening', 'balanced openings', 'open facade', 'open to the horizon on all sides'][r(2)],
+    ['still and silent', 'slow rhythm', 'calm rhythm', 'flowing path', 'continuous movement'][r(3)],
+    ['cool tones', 'cool grey', 'neutral', 'warm tones', 'warm wood and earth'][r(4)]];
   return `Architectural living space embodying "${name}": ${space}. ${w.join(', ')}. one human figure for scale, no decoration. Documentary realism, Professional architecture photography, 1:1`;
 }
 function addExample(ch) {
   const id = `u${Date.now().toString(36)}`;
-  lightbox({ title: `מרחב חדש בפרק ${ch.n}: ${ch.title}`, color: ch.color, html: `
+  lightbox({ title: `דוגמה חדשה בפרק ${ch.n}: ${ch.lens}`, color: ch.color, html: `
     <form class="addf" id="addf" style="--c:${ch.color}">
       <div class="addf-cols">
-        <div class="addf-fields">
-          <label>שם המושג<input name="name" required maxlength="40" placeholder="למשל: מדבר שקט"></label>
-          <label>תובנה (עד 8 מילים)<input name="insight" required maxlength="60" placeholder="משפט אחד שמזקק את המושג"></label>
-          <label>המרחב (עד 20 מילים)<textarea name="space" required maxlength="160" rows="3" placeholder="חומר, אור, פתח, תנועה"></textarea></label>
-          <label>ציטוט או הייקו (רשות)<input name="quote" maxlength="120"></label>
-          <div class="sliders">${DIMS.map((d, k) => `<label class="sl"><span>${d.k}</span><small>${d.lo}</small><input type="range" min="1" max="5" value="3" name="d${k}"><small>${d.hi}</small><b>3</b></label>`).join('')}</div>
+        <div>
+          <label>שם המושג<input name="name" required maxlength="40" placeholder="דוגמה: מדבר שקט"></label>
+          <label>תובנה, עד 8 מילים<input name="insight" required maxlength="60" placeholder="דוגמה: השקט הוא חומר בנייה."></label>
+          <label>המרחב, עד 20 מילים<textarea name="space" required maxlength="160" rows="3" placeholder="דוגמה: חצר שקועה, קיר אבן עבה, חריץ אור אחד בצהריים."></textarea></label>
+          <label>ציטוט או הייקו, רשות<input name="quote" maxlength="120"></label>
+          <div class="lab">חמשת הממדים: גוררים את הנקודות בעכביש</div>
+          <div id="addRadar"></div>
         </div>
         <div class="addf-out">
           <div class="lab">פרומפט למידג׳רני, מתעדכן תוך כדי</div>
           <div class="prompt" id="addPr"></div>
-          <div class="row"><button type="button" class="btn" id="cpPr">העתקת הפרומפט</button><button type="button" class="btn" id="genImg">יצירת תמונה</button></div>
-          <div class="gen" id="genBox"><span class="muted small">התמונה תופיע כאן. נוצרת בשירות החינמי Pollinations, בלי מפתח, ולוקחת כ-20 שניות.</span></div>
-          <div class="row end"><button class="btn primary" type="submit">שמירה בפרק</button></div>
-          <p class="muted small">נשמר בדפדפן הזה בלבד. אפשר להעביר בייצוא מהמקרא.</p>
+          <div class="row"><button type="button" class="btn" id="cpPr">העתקת הפרומפט</button><button type="button" class="btn" id="genImg" data-d="שירות חינמי (Pollinations), בלי מפתח, כ-20 שניות">יצירת תמונה</button></div>
+          <figure class="drop" id="addDrop" tabindex="0"><span>התמונה תופיע כאן. אפשר גם להדביק או לגרור.</span><figcaption id="addCap"></figcaption></figure>
+          <div class="row"><button class="btn primary" type="submit">שמירה בפרק</button><button class="btn" type="button" id="cancelAdd">ביטול</button></div>
+          <p class="tool-note">נשמר בדפדפן הזה בלבד.<br>מעבירים בייצוא מהמקרא.</p>
         </div>
       </div>
     </form>` });
   const f = document.getElementById('addf'), pr = document.getElementById('addPr');
-  let imgUrl = '';
-  const read = () => ({ name: f.name.value.trim(), insight: f.insight.value.trim(), space: f.space.value.trim(), quote: f.quote.value.trim(), dna: DIMS.map((_, k) => +f[`d${k}`].value) });
-  const upd = () => { const v = read(); f.querySelectorAll('.sl').forEach((s, k) => s.querySelector('b').textContent = v.dna[k]); pr.innerHTML = `<b>${esc(v.name || 'המושג')}: ${esc(v.insight || '')}</b><span class="en">${esc(enPrompt(v.name || 'concept', v.space || '', v.dna))} --ar 1:1 --style raw --no text, words, writing, frame divisions</span>`; };
-  f.addEventListener('input', upd); upd();
+  let dna = [3, 3, 3, 3, 3], imgUrl = '';
+  const drawRadar = () => {
+    document.getElementById('addRadar').innerHTML = radar([{ vals: dna, color: ch.color, main: true }], { editable: true, size: 240 });
+    bindRadar(document.querySelector('#addRadar svg'), dna.slice(), ch.color, (d, moving) => { dna = d; upd(); if (!moving) drawRadar(); else { const svg = document.querySelector('#addRadar svg'); const tmp = document.createElement('div'); tmp.innerHTML = radar([{ vals: dna, color: ch.color, main: true }], { editable: true, size: 240 }); svg.querySelector('.mainp').setAttribute('points', tmp.querySelector('.mainp').getAttribute('points')); svg.querySelectorAll('.hdl').forEach((h, k) => { h.setAttribute('cx', tmp.querySelectorAll('.hdl')[k].getAttribute('cx')); h.setAttribute('cy', tmp.querySelectorAll('.hdl')[k].getAttribute('cy')); }); } });
+  };
+  const read = () => ({ name: f.name.value.trim(), insight: f.insight.value.trim(), space: f.space.value.trim(), quote: f.quote.value.trim(), dna: dna.map(v => Math.round(v)) });
+  const upd = () => { const v = read(); document.getElementById('addCap').textContent = v.insight; pr.innerHTML = `<b>${esc(v.name || 'המושג')}: ${esc(v.insight)}</b><span class="en">${esc(enPrompt(v.name || 'concept', v.space, v.dna))} --ar 1:1 --style raw --no text, words, writing, frame divisions</span>`; };
+  f.addEventListener('input', upd); drawRadar(); upd();
   document.getElementById('cpPr').onclick = () => navigator.clipboard?.writeText(pr.innerText).then(() => toast('הפרומפט הועתק'), () => toast('ההעתקה נחסמה בדפדפן'));
+  document.getElementById('cancelAdd').onclick = () => document.querySelector('.lb')?.remove();
+  const box = document.getElementById('addDrop');
+  const show = u => { imgUrl = u; box.querySelector('span, img')?.remove(); const im = new Image(); im.src = u; im.alt = ''; box.prepend(im); };
   document.getElementById('genImg').onclick = () => {
     const v = read(); if (!v.name || !v.space) { toast('קודם שם ומרחב'); return; }
-    imgUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(enPrompt(v.name, v.space, v.dna))}?width=768&height=768&nologo=true&seed=${hash(id) % 9999}`;
-    const box = document.getElementById('genBox'); box.innerHTML = '<span class="muted small">יוצר תמונה…</span>';
-    const im = new Image(); im.alt = v.name; im.onload = () => { box.innerHTML = ''; box.appendChild(im); }; im.onerror = () => { box.innerHTML = '<span class="small" style="color:var(--bad)">השירות לא החזיר תמונה. אפשר להעתיק את הפרומפט ולהריץ במידג׳רני.</span>'; imgUrl = ''; }; im.src = imgUrl;
+    const u = `https://image.pollinations.ai/prompt/${encodeURIComponent(enPrompt(v.name, v.space, v.dna))}?width=768&height=768&nologo=true&seed=${hash(id) % 9999}`;
+    box.querySelector('span, img')?.remove(); box.insertAdjacentHTML('afterbegin', '<span>יוצר תמונה…</span>');
+    const im = new Image(); im.onload = () => show(u); im.onerror = () => { box.querySelector('span').textContent = 'השירות לא החזיר תמונה. העתיקו את הפרומפט והריצו במידג׳רני.'; }; im.src = u;
   };
+  const takeFile = file => { if (!file?.type.startsWith('image/')) return; const r = new FileReader(); r.onload = () => show(r.result); r.readAsDataURL(file); };
+  box.addEventListener('dragover', e => { e.preventDefault(); box.classList.add('over'); });
+  box.addEventListener('drop', e => { e.preventDefault(); box.classList.remove('over'); takeFile(e.dataTransfer.files[0]); });
+  box.addEventListener('paste', e => { const x = [...e.clipboardData.items].find(i => i.type.startsWith('image/')); if (x) takeFile(x.getAsFile()); });
   f.addEventListener('submit', e => {
     e.preventDefault(); const v = read();
-    const item = { id, ...v, sub: 'נוסף על ידך', img: imgUrl || null, custom: true };
-    (CUSTOM[ch.id] ||= []).push(item); saveCustom(CUSTOM);
-    ch.items.push(item); reindex(); byId = BYID();
-    document.querySelector('.lb')?.remove(); toast('המרחב נשמר בפרק');
+    const item = { id, ...v, sub: 'נוסף על ידך', img: /^https?:/.test(imgUrl) ? imgUrl : null, custom: true };
+    if (imgUrl.startsWith('data:')) { USERIMG[id] = imgUrl; lsSet(LSI, USERIMG); }
+    (CUSTOM[ch.id] ||= []).push(item); lsSet(LS, CUSTOM);
+    ch.items.push(item); reindex();
+    document.querySelector('.lb')?.remove(); toast('הדוגמה נשמרה בפרק');
     location.hash = `#/c/${ch.id}/${id}`;
   });
 }
 function delCustom(id) {
   const it = byId[id]; if (!it?.custom || !confirm(`למחוק את "${it.name}"?`)) return;
   const ch = it.ch; ch.items.splice(ch.items.indexOf(it), 1);
-  CUSTOM[ch.id] = (CUSTOM[ch.id] || []).filter(x => x.id !== id); saveCustom(CUSTOM);
-  reindex(); byId = BYID(); location.hash = `#/c/${ch.id}`; toast('נמחק');
+  CUSTOM[ch.id] = (CUSTOM[ch.id] || []).filter(x => x.id !== id); lsSet(LS, CUSTOM);
+  delete USERIMG[id]; lsSet(LSI, USERIMG);
+  reindex(); location.hash = `#/c/${ch.id}`; toast('נמחק');
 }
 
-// ---------- אטלס ----------
-const atlasState = { x: 1, y: 0, z: 2, on: new Set(), mode: 'solo', sel: null, d3: false };
-function viewAtlas(sel) {
-  if (sel !== undefined) atlasState.sel = sel || null;
+// ================= אטלס =================
+const atlasState = { x: 1, y: 0, z: 2, on: new Set(), mode: 'solo', sel: null, view: 'plane' };
+const VIEWS = {
+  plane: { n: 'מישור', d: 'שני ממדים על שני צירים.\nהראשית בפינה: 1,1.\nדוגמה: מסה מול אור.' },
+  cube: { n: 'קובייה', d: 'שלושה ממדים בתיבה.\nגוררים לסיבוב.\nדוגמה: מסה, אור ופתיחות.' },
+  circle: { n: 'מעגל', d: 'כל חמשת הממדים יחד.\nכל ממד הוא עוגן על המעגל, וכל דוגמה נמשכת לממדים החזקים שלה.\nדוגמה מאוזנת יושבת במרכז.' },
+  sphere: { n: 'כדור', d: 'כמו המעגל, על כדור.\nהכיוון הוא הנטייה, המרחק מהמרכז הוא העוצמה.\nגוררים לסיבוב.' },
+};
+function viewAtlas(arg) {
   const S = atlasState;
+  if (arg?.startsWith('ch:')) { const id = arg.slice(3); if (S.mode === 'solo') S.on = (S.on.size === 1 && S.on.has(id)) ? new Set() : new Set([id]); else { if (!S.on.size) S.on = new Set(CHAPTERS.map(c => c.id)); S.on.has(id) ? S.on.delete(id) : S.on.add(id); if (S.on.size === CHAPTERS.length) S.on.clear(); } S.sel = null; history.replaceState(null, '', '#/atlas'); chapterBar(); }
+  else if (arg !== undefined) S.sel = arg || null;
+  const v2 = S.view === 'plane', vx = S.view === 'plane' || S.view === 'cube';
   app.innerHTML = `
   <section class="view atlas">
     <div class="atlas-main">
       <h1 id="atlasTitle"></h1>
-      <div class="filters">
-        <span class="seg" role="group" aria-label="אופן הבחירה"><button class="${S.mode === 'solo' ? 'on' : ''}" data-mode="solo" title="לחיצה על תחום מציגה רק אותו">בודד</button><button class="${S.mode === 'add' ? 'on' : ''}" data-mode="add" title="לחיצה מוסיפה או מורידה תחום">הוספה</button><button data-reset="1" title="כל התחומים">איפוס</button></span>
-        ${CHAPTERS.map(c => `<button class="chip ${!S.on.size || S.on.has(c.id) ? 'on' : ''}" data-ch="${c.id}" style="--c:${c.color}"><i></i>${c.lens}</button>`).join('')}
-      </div>
-      <div class="axes">
-        <label>ציר אופקי <select id="ax">${DIMS.map((d, i) => `<option value="${i}" ${i === S.x ? 'selected' : ''}>${d.k}</option>`).join('')}</select></label>
-        <label>ציר אנכי <select id="ay">${DIMS.map((d, i) => `<option value="${i}" ${i === S.y ? 'selected' : ''}>${d.k}</option>`).join('')}</select></label>
-        <label class="${S.d3 ? '' : 'dim'}">ציר עומק <select id="az">${DIMS.map((d, i) => `<option value="${i}" ${i === S.z ? 'selected' : ''}>${d.k}</option>`).join('')}</select></label>
-        <span class="seg"><button class="${S.d3 ? '' : 'on'}" data-d3="0">מישור</button><button class="${S.d3 ? 'on' : ''}" data-d3="1">מרחב</button></span>
+      <div class="tools">
+        <span class="seg"><button class="${!S.on.size ? 'on' : ''}" data-all="1" data-d="כל הפרקים מוצגים">הכל</button><button class="${S.mode === 'solo' ? 'on' : ''}" data-mode="solo" data-d="לחיצה על פרק בסרגל מציגה רק אותו. לחיצה שנייה מחזירה הכל">בודד</button><button class="${S.mode === 'add' ? 'on' : ''}" data-mode="add" data-d="לחיצה על פרק בסרגל מוסיפה או מורידה אותו">הוספה</button><button data-all="1" data-d="חזרה למצב ההתחלה">איפוס</button></span>
+        <span class="seg">${Object.entries(VIEWS).map(([k, v]) => `<button class="${S.view === k ? 'on' : ''}" data-view="${k}" data-d="${esc(v.d.replace(/\n/g, ' '))}">${v.n}</button>`).join('')}</span>
+        ${vx ? `<label>אופקי <select id="ax">${DIMS.map((d, i) => `<option value="${i}" ${i === S.x ? 'selected' : ''}>${d.k}</option>`).join('')}</select></label>
+        <label>אנכי <select id="ay">${DIMS.map((d, i) => `<option value="${i}" ${i === S.y ? 'selected' : ''}>${d.k}</option>`).join('')}</select></label>` : ''}
+        ${S.view === 'cube' ? `<label>עומק <select id="az">${DIMS.map((d, i) => `<option value="${i}" ${i === S.z ? 'selected' : ''}>${d.k}</option>`).join('')}</select></label>` : ''}
       </div>
       <div class="plot" id="plot"><div class="tipbox" id="tipbox"></div></div>
-      <div class="plot-note">כל עיגול הוא מרחב. הצבע: התחום. עיגולים שקופים: איפה שהם נחפפים, מרחבים מתחומים שונים יוצרים "חדר" משותף. מה נמדד: ה-DNA הפרשני, 1 עד 5.</div>
+      <div class="legend-row">
+        <span><i class="lg-dot"></i>עיגול: דוגמה</span>
+        <span><i class="lg-col"></i>צבע: הפרק</span>
+        <span><i class="lg-sel"></i>עיגול גדול עם שם: הנבחרת ושלוש הקרובות לה</span>
+        ${v2 ? '<span><i class="lg-zone"></i>אזור אפור: הפינה שבה נפגשים הכי הרבה פרקים</span><span><i class="lg-org"></i>ראשית הצירים: 1,1</span>' : ''}
+        <span class="how">${VIEWS[S.view].d.split('\n')[0]}</span>
+      </div>
     </div>
     <aside class="side" id="aside"></aside>
   </section>`;
   const plot = document.getElementById('plot');
   const vis = () => ALL.filter(it => !S.on.size || S.on.has(it.ch.id));
-  function headline() {
+  const sel = S.sel && byId[S.sel];
+  const linked = sel ? new Set(resonances(sel.dna, sel.ch, 3, sel.id).map(q => q.o.id)) : new Set();
+  function zone() {
     const { x, y } = S, v = vis();
-    const corners = [[1, 2, 1, 2], [4, 5, 4, 5], [4, 5, 1, 2], [1, 2, 4, 5]].map(([a, b, c, d]) => {
+    return [[1, 2, 1, 2], [4, 5, 4, 5], [4, 5, 1, 2], [1, 2, 4, 5]].map(([a, b, c, d]) => {
       const inn = v.filter(it => it.dna[x] >= a && it.dna[x] <= b && it.dna[y] >= c && it.dna[y] <= d);
       return { a, c, inn, chs: [...new Set(inn.map(i => i.ch.lens))] };
-    }).sort((p, q) => q.chs.length - p.chs.length || q.inn.length - p.inn.length);
-    const top = corners[0];
-    const dx = top.a > 3 ? DIMS[x].hi : DIMS[x].lo, dy = top.c > 3 ? DIMS[y].hi : DIMS[y].lo;
-    document.getElementById('atlasTitle').innerHTML = top.inn.length ? `<span class="mk">${dx} ו${dy}</span>: כאן נפגשים ${top.chs.length} תחומים` : 'בחרו תחומים להצגה';
-    return top;
+    }).sort((p, q) => q.chs.length - p.chs.length || q.inn.length - p.inn.length)[0];
   }
   async function render() {
     if (!plot.isConnected) return;
-    const top = headline();
-    plot.querySelector('svg')?.remove(); plot.querySelector('canvas')?.remove();
-    const sel = S.sel && byId[S.sel];
-    const linked = sel ? new Set(resonances(sel).map(q => q.o.id)) : new Set();
-    if (S.d3) {
+    plot.querySelectorAll('svg, canvas').forEach(e => e.remove());
+    const title = document.getElementById('atlasTitle');
+    if (S.view === 'cube' || S.view === 'sphere') {
+      title.innerHTML = S.view === 'cube' ? 'שלושה ממדים, תיבה אחת' : 'הנטייה של כל דוגמה, על כדור';
       const { buildAtlas3D } = await import('./atlas3d.js');
-      buildAtlas3D(plot, vis(), { x: S.x, y: S.y, z: S.z, dims: DIMS, sel: S.sel, linked, onPick: id => { location.hash = `#/atlas/${id}`; } });
-      side(); return;
+      buildAtlas3D(plot, vis(), { mode: S.view, x: S.x, y: S.y, z: S.z, dims: DIMS, sel: S.sel, linked, onPick: id => { location.hash = `#/atlas/${id}`; } });
+      return;
     }
     const r = plot.getBoundingClientRect(), W = Math.max(300, r.width), H = Math.max(260, r.height);
-    const P = 54, sx = v => P + (v - .5) / 5 * (W - P * 1.5), sy = v => H - P - (v - .5) / 5 * (H - P * 1.5);
-    const jit = (id, k) => ((hash(id + k) % 1000) / 1000 - .5) * .7;
-    const cell = Math.min((W - P * 1.5) / 5, (H - P * 1.5) / 5);
-    const rad = Math.max(12, cell * .2);
-    plot.insertAdjacentHTML('afterbegin', `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="פיזור המרחבים">
-      <g class="axis">
-        ${[1, 2, 3, 4, 5].map(v => `<line x1="${sx(v)}" x2="${sx(v)}" y1="${P / 2}" y2="${H - P}" /><line x1="${P}" x2="${W - P / 2}" y1="${sy(v)}" y2="${sy(v)}" /><text class="tk" x="${sx(v)}" y="${H - P + 18}" text-anchor="middle">${v}</text><text class="tk" x="${P - 10}" y="${sy(v) + 4}" text-anchor="end">${v}</text>`).join('')}
-        <text class="ax" x="${W - P / 2}" y="${H - 10}" text-anchor="end">${DIMS[S.x].k}: ${DIMS[S.x].lo} ← → ${DIMS[S.x].hi}</text>
-        <text class="ax" x="16" y="${H / 2}" text-anchor="middle" transform="rotate(-90 16 ${H / 2})">${DIMS[S.y].k}: ${DIMS[S.y].lo} ← → ${DIMS[S.y].hi}</text>
-      </g>
-      <rect x="${sx(top.a - .5)}" y="${sy(top.c + 1.5)}" width="${sx(top.a + 1.5) - sx(top.a - .5)}" height="${sy(top.c - .5) - sy(top.c + 1.5)}" fill="var(--marker)" opacity=".35"/>
-      <g style="mix-blend-mode:multiply">${vis().map(it => {
-        const hl = it === sel || linked.has(it.id), dim = sel && !hl;
-        return `<circle class="dot" data-id="${it.id}" cx="${sx(it.dna[S.x] + jit(it.id, 'x'))}" cy="${sy(it.dna[S.y] + jit(it.id, 'y'))}" r="${it === sel ? rad * 1.5 : hl ? rad * 1.25 : rad}" fill="${it.ch.color}" fill-opacity="${dim ? .08 : hl ? .5 : .26}" stroke="${it.ch.color}" stroke-opacity="${dim ? .2 : .85}" stroke-width="${hl ? 2.5 : 1.2}"/>`;
-      }).join('')}</g>
-      ${sel ? [sel, ...[...linked].map(id => byId[id])].map(o => `<text class="lbl" x="${sx(o.dna[S.x] + jit(o.id, 'x'))}" y="${sy(o.dna[S.y] + jit(o.id, 'y')) - rad * 1.5 - 6}" text-anchor="middle">${esc(o.name)}</text>`).join('') : ''}
+    const jit = (id, k) => ((hash(id + k) % 1000) / 1000 - .5);
+    const dots = [];
+    let extra = '';
+    if (S.view === 'plane') {
+      const z = zone();
+      title.innerHTML = z.inn.length ? `<span class="mk">${z.a > 3 ? DIMS[S.x].hi : DIMS[S.x].lo} ו${z.c > 3 ? DIMS[S.y].hi : DIMS[S.y].lo}</span>: כאן נפגשים ${z.chs.length} פרקים` : 'בחרו פרקים בסרגל';
+      const P = 60, sx = v => P + (v - .5) / 5 * (W - P * 1.6), sy = v => H - P - (v - .5) / 5 * (H - P * 1.6);
+      const rad = Math.max(12, Math.min((W - P * 1.6) / 5, (H - P * 1.6) / 5) * .19);
+      vis().forEach(it => dots.push({ it, x: sx(it.dna[S.x] + jit(it.id, 'x') * .7), y: sy(it.dna[S.y] + jit(it.id, 'y') * .7), r: rad }));
+      const ox = sx(.5), oy = sy(.5);
+      extra = `
+        <defs><marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#141414"/></marker></defs>
+        <g class="axis">${[1, 2, 3, 4, 5].map(v => `<line class="g" x1="${sx(v)}" x2="${sx(v)}" y1="${sy(5.5)}" y2="${oy}"/><line class="g" x1="${ox}" x2="${sx(5.5)}" y1="${sy(v)}" y2="${sy(v)}"/><text class="tk" x="${sx(v)}" y="${oy + 18}" text-anchor="middle">${v}</text><text class="tk" x="${ox - 10}" y="${sy(v) + 4}" text-anchor="end">${v}</text>`).join('')}
+          <line class="ax-l" x1="${ox}" y1="${oy}" x2="${sx(5.6)}" y2="${oy}" marker-end="url(#arr)"/><line class="ax-l" x1="${ox}" y1="${oy}" x2="${ox}" y2="${sy(5.6)}" marker-end="url(#arr)"/>
+          <circle cx="${ox}" cy="${oy}" r="5" fill="#141414"/><text class="org" x="${ox - 8}" y="${oy + 34}" text-anchor="end">ראשית</text>
+          <text class="ax" x="${sx(5.6)}" y="${oy + 40}" text-anchor="start">${DIMS[S.x].k}: מ${DIMS[S.x].lo} אל ${DIMS[S.x].hi}</text>
+          <text class="ax" x="${ox - 30}" y="${sy(3)}" text-anchor="middle" transform="rotate(-90 ${ox - 30} ${sy(3)})">${DIMS[S.y].k}: מ${DIMS[S.y].lo} אל ${DIMS[S.y].hi}</text></g>
+        <rect x="${sx(z.a - .5)}" y="${sy(z.c + 1.5)}" width="${sx(z.a + 1.5) - sx(z.a - .5)}" height="${sy(z.c - .5) - sy(z.c + 1.5)}" fill="#8a8a8a" opacity=".13"/>
+        <text class="zl" x="${sx(z.a + 1.5) - 6}" y="${sy(z.c + 1.5) + 16}" text-anchor="end">אזור המפגש</text>`;
+    } else {
+      // מעגל: RadViz. חמישה עוגנים, וכל דוגמה נמשכת לפי עוצמת כל ממד
+      title.innerHTML = '<span class="mk">כל חמשת הממדים</span>: לאן כל דוגמה נמשכת';
+      const cx = W / 2, cy = H / 2, R = Math.min(W, H) / 2 - 56;
+      const anc = DIMS.map((_, k) => { const a = -Math.PI / 2 + k * 2 * Math.PI / 5; return [Math.cos(a), Math.sin(a)]; });
+      vis().forEach(it => {
+        const m = it.dna.reduce((a, v) => a + v, 0) / 5, w = it.dna.map(v => Math.exp(1.3 * (v - m))), s = w.reduce((a, v) => a + v, 0);
+        let px = w.reduce((a, v, k) => a + v * anc[k][0], 0) / s, py = w.reduce((a, v, k) => a + v * anc[k][1], 0) / s;
+        px += jit(it.id, 'x') * .06; py += jit(it.id, 'y') * .06;
+        const len = Math.hypot(px, py) * 1.25, k2 = len > .96 ? .96 / len : 1;
+        dots.push({ it, x: cx + px * 1.25 * k2 * R, y: cy + py * 1.25 * k2 * R, r: 13 });
+      });
+      extra = `<g class="axis"><circle cx="${cx}" cy="${cy}" r="${R}" fill="none" class="g"/><circle cx="${cx}" cy="${cy}" r="${R / 2}" fill="none" class="g"/>
+        ${anc.map(([ax, ay], k) => `<line class="ax-l" x1="${cx}" y1="${cy}" x2="${cx + ax * R}" y2="${cy + ay * R}"/><circle cx="${cx + ax * R}" cy="${cy + ay * R}" r="6" fill="#141414"/><text class="ax" x="${cx + ax * (R + 26)}" y="${cy + ay * (R + 26) + 5}" text-anchor="middle">${DIMS[k].k}</text>`).join('')}
+        <circle cx="${cx}" cy="${cy}" r="5" fill="#141414"/><text class="org" x="${cx}" y="${cy + 22}" text-anchor="middle">איזון</text></g>`;
+    }
+    plot.insertAdjacentHTML('afterbegin', `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="פיזור הדוגמאות">${extra}
+      <g style="mix-blend-mode:multiply">${dots.map(({ it, x, y, r }) => { const hl = it === sel || linked.has(it.id), dim = sel && !hl; return `<circle class="dot" data-id="${it.id}" cx="${x}" cy="${y}" r="${it === sel ? r * 1.5 : hl ? r * 1.25 : r}" fill="${it.ch.color}" fill-opacity="${dim ? .07 : hl ? .5 : .24}" stroke="${it.ch.color}" stroke-opacity="${dim ? .18 : .85}" stroke-width="${hl ? 2.5 : 1.2}"/>`; }).join('')}</g>
+      ${dots.filter(d => d.it === sel || linked.has(d.it.id)).map(d => `<text class="lbl" x="${d.x}" y="${d.y - d.r * 1.5 - 6}" text-anchor="middle">${esc(d.it.name)}</text>`).join('')}
     </svg>`);
-    side();
   }
   function side() {
     const el = document.getElementById('aside');
-    const it = S.sel && byId[S.sel];
+    const it = sel;
     if (!it) {
-      el.innerHTML = `<div><h3>איך קוראים</h3><p class="why">לוחצים על עיגול: נפתח המרחב, ושלושת המרחבים הקרובים לו מתחומים אחרים מודגשים, עם השם שלהם.</p></div>
-      <div><h3>הגילוי</h3><p style="margin:0">הממדים חוזרים בכל התחומים. השינה העמוקה, התו הנמוך והגבורה יושבים באותה פינה.</p></div>
-      <div class="mini-legend">${CHAPTERS.map(c => `<span><i style="background:${c.color}"></i>${c.lens}: ${c.title}</span>`).join('')}</div>`;
+      const shown = CHAPTERS.filter(c => !S.on.size || S.on.has(c.id));
+      const g = avg(ALL);
+      el.innerHTML = `<div><h3>הנטייה של כל פרק</h3><p class="why">כל קו הוא פרק אחד, בצבע שלו.<br>מוצגת הסטייה מהממוצע של כל הספר, מוגדלת פי 4: העיגול האמצעי הוא הממוצע.<br>מצמצמים בסרגל הפרקים, למעלה.</p>
+        ${radar(shown.map(c => ({ vals: avg(c.items).map((v, k) => Math.max(.3, Math.min(5, 3 + (v - g[k]) * 4))), color: c.color })), { size: 260 })}
+        <div class="mini-legend">${shown.map(c => `<span><i style="background:${c.color}"></i>${c.n}. ${c.lens}</span>`).join('')}</div></div>
+        <div><h3>איך קוראים</h3><p class="why">לוחצים על עיגול.<br>נפתחת הדוגמה, ושלוש הקרובות לה מתחומים אחרים מקבלות שם.</p></div>`;
       return;
     }
-    const res = resonances(it);
+    const res = resonances(it.dna, it.ch, 3, it.id);
     el.innerHTML = `<div style="--c:${it.ch.color}">
-      ${it.img ? `<div class="live zoomable side-img" data-img="${it.img}"><img class="blurbg" src="${src(it.img)}" alt=""><img class="main" src="${src(it.img)}" alt="${esc(it.name)}"></div>` : ''}
-      <div class="small" style="color:${it.ch.color};font-weight:800;margin-top:10px">${it.ch.lens} · מרחב ${it.i + 1}</div>
+      ${(USERIMG[it.id] || it.img) ? `<div class="live zoomable side-img"><img class="blurbg" src="${USERIMG[it.id] || src(it.img)}" alt=""><img class="main" src="${USERIMG[it.id] || src(it.img)}" alt="${esc(it.name)}"></div>` : ''}
+      <div class="crumb" style="color:${it.ch.color}">${it.ch.lens} · דוגמה ${it.i + 1}</div>
       <h2 class="side-h">${esc(it.name)}</h2>
-      <p style="margin:0 0 8px"><span class="mk">${esc(it.insight)}</span></p>
-      <p style="margin:0;font-size:14px">${esc(it.space)}</p></div>
-      <div><h3>העכביש: המרחב ותהודותיו</h3>${radar([{ vals: it.dna, color: it.ch.color, main: true }, ...res.map(r => ({ vals: r.o.dna, color: r.o.ch.color }))])}</div>
+      <p class="ins-s"><span class="mk">${esc(it.insight)}</span></p></div>
+      <div><h3>העכביש: הדוגמה ותהודותיה</h3>${radar([{ vals: it.dna, color: it.ch.color, main: true }, ...res.map(r => ({ vals: r.o.dna, color: r.o.ch.color }))])}</div>
       <div><h3>תהודות</h3><div class="res">${res.map(r => `<a href="#/atlas/${r.o.id}" style="--c:${r.o.ch.color}"><span class="th" style="${thumbStyle(r.o)}"></span><span><span class="ch">${r.o.ch.lens}</span><div class="nm">${esc(r.o.name)}</div><div class="rule">משותף: ${esc(r.rule)}</div></span></a>`).join('')}</div></div>
-      <div class="side-actions"><a class="btn" href="#/c/${it.ch.id}/${it.id}">לקרוא בספר</a><a class="btn" href="#/atlas/">ניקוי בחירה</a></div>`;
-    el.querySelector('.side-img')?.addEventListener('click', () => lightbox({ img: src(it.img), title: it.name, page: it.page, color: it.ch.color }));
+      <div class="row"><a class="btn" href="#/c/${it.ch.id}/${it.id}">לדוגמה בספר</a><a class="btn" href="#/atlas/" data-d="סוגר את הבחירה וחוזר לתמונה הכללית">סגירת הבחירה</a></div>`;
+    el.querySelector('.side-img')?.addEventListener('click', () => lightbox({ img: USERIMG[it.id] || src(it.img), title: it.name, page: it.page, color: it.ch.color }));
   }
-  render();
+  render(); side();
   const tip = document.getElementById('tipbox');
   plot.addEventListener('mousemove', e => {
     const d = e.target.closest?.('.dot');
     if (!d) { tip.style.display = 'none'; return; }
     const it = byId[d.dataset.id], r = plot.getBoundingClientRect();
-    tip.innerHTML = `<b>${esc(it.name)}</b><br><span style="color:${it.ch.color};font-weight:700">${it.ch.lens}</span> · ${esc(it.insight)}`;
-    tip.style.display = 'block';
-    tip.style.left = `${Math.min(r.width - 230, e.clientX - r.left + 14)}px`;
-    tip.style.top = `${e.clientY - r.top + 14}px`;
+    tip.innerHTML = `<b>${esc(it.name)}</b><br><span style="color:${it.ch.color};font-weight:700">${it.ch.lens}</span><br>${esc(it.insight)}`;
+    tip.style.display = 'block'; tip.style.left = `${Math.min(r.width - 230, e.clientX - r.left + 14)}px`; tip.style.top = `${e.clientY - r.top + 14}px`;
   });
   plot.addEventListener('click', e => { const d = e.target.closest?.('.dot'); if (d) location.hash = `#/atlas/${d.dataset.id}`; });
-  app.querySelector('.atlas-main').addEventListener('click', e => {
+  app.querySelector('.tools').addEventListener('click', e => {
     const b = e.target.closest('button'); if (!b) return;
-    if (b.dataset.mode) { S.mode = b.dataset.mode; }
-    else if (b.dataset.reset) { S.on.clear(); }
-    else if (b.dataset.d3) { S.d3 = b.dataset.d3 === '1'; }
-    else if (b.dataset.ch) {
-      const id = b.dataset.ch;
-      if (S.mode === 'solo') S.on = (S.on.size === 1 && S.on.has(id)) ? new Set() : new Set([id]);
-      else { if (!S.on.size) S.on = new Set(CHAPTERS.map(c => c.id)); S.on.has(id) ? S.on.delete(id) : S.on.add(id); if (S.on.size === CHAPTERS.length) S.on.clear(); }
-    } else return;
-    viewAtlas();
+    if (b.dataset.mode) S.mode = b.dataset.mode;
+    else if (b.dataset.all) { S.on.clear(); S.mode = 'solo'; }
+    else if (b.dataset.view) S.view = b.dataset.view;
+    else return;
+    chapterBar(); viewAtlas();
   });
-  ['ax', 'ay', 'az'].forEach((k, i) => { document.getElementById(k).onchange = e => { S[['x', 'y', 'z'][i]] = +e.target.value; render(); }; });
-  let rt; new ResizeObserver(() => { if (!S.d3) { clearTimeout(rt); rt = setTimeout(render, 60); } }).observe(plot);
+  ['ax', 'ay', 'az'].forEach((k, i) => { const el = document.getElementById(k); if (el) el.onchange = e => { S[['x', 'y', 'z'][i]] = +e.target.value; render(); }; });
+  let rt; new ResizeObserver(() => { if (S.view === 'plane' || S.view === 'circle') { clearTimeout(rt); rt = setTimeout(render, 80); } }).observe(plot);
 }
 
-// ---------- סטודיו ----------
-async function viewStudio(iid) {
+// ================= סטודיו: מכוונים שמשנים את המודל =================
+async function viewStudio(iid, q) {
   const it = byId[iid] || byId.prime;
   const ch = it.ch;
-  const distill = `${it.name}: ${it.insight}`;
-  const en = `${enPrompt(it.name, it.space, it.dna)} --ar 1:1 --style raw --no text, words, writing, frame divisions`;
+  let dna = q.get('dna') ? q.get('dna').split(',').map(Number).slice(0, 5) : it.dna.slice();
+  if (dna.length !== 5 || dna.some(isNaN)) dna = it.dna.slice();
   app.innerHTML = `
   <section class="view studio" style="--c:${ch.color}">
-    <aside class="toc">
-      <div class="toc-head">
-        <select id="stCh" aria-label="בחירת פרק">${CHAPTERS.map(c => `<option value="${c.id}" ${c === ch ? 'selected' : ''}>${c.n}. ${c.lens}</option>`).join('')}</select>
-        <div class="sortnote">בוחרים מרחב, והחדר נבנה מה-DNA שלו</div>
-      </div>
-      <div class="toc-list">${ch.items.map(x => `<a href="#/studio/${x.id}" class="${x === it ? 'on' : ''}"><span class="th" style="${thumbStyle(x, ch)}"><i class="no">${x.i + 1}</i></span><span><span class="nm">${esc(x.name)}</span><span class="sb">${esc(x.sub)}</span></span></a>`).join('')}</div>
-    </aside>
     <div class="three" id="three">
-      <div class="hud">
-        <div><h2>${esc(it.name)}</h2><div class="rule">גובה מהפתיחות, עובי קיר מהמסה, פתחים ושמיים מהאור, מקצב עמודים מהתנועה, גוון מהחום.</div></div>
-      </div>
+      <div class="hud"><h2>${esc(it.name)}</h2><div class="rule" id="rule"></div></div>
       <div class="viewbar" id="viewbar"></div>
       <div class="status" id="st">טוען מנוע תלת־ממד…</div>
     </div>
     <aside class="side">
-      <div><h3>ה-DNA שבונה את החדר</h3>${radar([{ vals: it.dna, color: ch.color, main: true }])}</div>
-      <div><h3>מצב תצוגה</h3>
-        <div class="seg wide" id="realSeg"><button class="on" data-real="1">ראליסטי</button><button data-real="0">מודל לבן</button></div>
+      <div><h3>מכוונים: גוררים את נקודות העכביש</h3><p class="why">כל ממד משנה את החדר מיד.<br>דוגמה: מושכים את "מסה" למעלה, והקירות מתעבים.</p>
+        <div id="rad"></div>
+        <div class="params small-p" id="prm"></div>
+        <div class="row"><button class="btn" id="reset" data-d="מחזיר את חמשת הממדים לערכים של ${esc(it.name)}">חזרה לדוגמה</button></div></div>
+      <div><h3>הכי קרוב לחדר שבנית</h3><div class="res" id="nearR"></div></div>
+      <div><h3>תצוגה</h3>
+        <div class="seg wide" id="realSeg"><button class="on" data-real="1" data-d="שמיים, השתקפויות, טקסטורות וצללים רכים">ראליסטי</button><button data-real="0" data-d="מודל לבן, כמו מודל עבודה">מודל לבן</button></div>
         <label class="ctxsel">סביבה <select id="ctxSel"></select></label></div>
-      <div class="row"><button class="btn" id="glb">הורדת GLB</button><button class="btn" id="png">צילום PNG</button><a class="btn" href="#/c/${ch.id}/${it.id}">למרחב בספר</a></div>
-      <div><h3>פרומפט למידג׳רני</h3>
-        <div class="prompt"><b>${esc(distill)}</b><span class="en">${esc(en)}</span></div>
-        <button class="btn" id="cp" style="margin-top:6px">העתקה</button></div>
+      <div class="row"><button class="btn" id="glb" data-d="קובץ glTF 2.0, נפתח ב-Blender, Rhino ו-SketchUp">הורדת GLB</button><button class="btn" id="png" data-d="צילום של המבט הנוכחי">צילום PNG</button></div>
       <details class="pipe"><summary>מסלול להמחשה ראלית ופוטוגנית</summary>
         <ol class="steps">
-          <li><span><b>מסה:</b> מורידים את ה-GLB מכאן. זה קנה המידה, הפתחים והקצב.</span></li>
+          <li><span><b>מסה:</b> מורידים GLB מכאן.</span></li>
           <li><span><b>מודל פרמטרי:</b> Rhino עם Grasshopper, או Blender עם Geometry Nodes.</span></li>
-          <li><span><b>חומרים:</b> טקסטורות PBR חופשיות מ-Poly Haven ו-ambientCG (CC0).</span></li>
+          <li><span><b>חומרים:</b> טקסטורות PBR חופשיות מ-Poly Haven ו-ambientCG.</span></li>
           <li><span><b>אור:</b> HDRI אמיתי לשעה ולמקום, ורינדור ב-Blender Cycles, D5 או Twinmotion.</span></li>
           <li><span><b>צילום:</b> עדשה 24 מ״מ, גובה עין 1.6 מ׳, אנכים ישרים.</span></li>
-          <li><span><b>מהספר לתלת־ממד:</b> image-to-3D (TRELLIS, Tripo) מתמונת הספר, וניקוי ב-Blender.</span></li>
         </ol>
-        <div class="std"><b>על מה זה נשען:</b> glTF 2.0 של Khronos, חומרי PBR. <b>אמינות:</b> משווים את הרינדור לתמונת הספר באותה זווית: יחס פתחים, כיוון אור וקנה מידה.</div>
+        <div class="std"><b>תקן:</b> glTF 2.0 של Khronos, חומרי PBR.<br><b>אמינות:</b> משווים את הרינדור לתמונת הספר באותה זווית.</div>
       </details>
     </aside>
   </section>`;
-  document.getElementById('stCh').onchange = e => { location.hash = `#/studio/${CH[e.target.value].items[0].id}`; };
-  document.getElementById('cp').onclick = () => navigator.clipboard?.writeText(`${distill}\n${en}`).then(() => toast('הפרומפט הועתק'), () => toast('ההעתקה נחסמה בדפדפן'));
-  try {
-    const { buildRoom, CONTEXTS } = await import('./studio.js');
-    const room = buildRoom(document.getElementById('three'), it, ch.color, { view: viewStudio.view || 'axo' });
+  let mod, room, real = true, ctx = null, view = viewStudio.view || 'axo', cam = null, tm;
+  try { mod = await import('./studio.js'); } catch (err) { document.getElementById('st').textContent = 'מנוע התלת־ממד לא נטען. רעננו את הדף.'; console.error(err); return; }
+  const host = document.getElementById('three');
+  function build() {
+    if (room) { cam = room.camState(); room.dispose(); }
+    room = mod.buildRoom(host, { ...it, dna: dna.map(v => Math.max(1, Math.min(5, v))) }, ch.color, { view, realistic: real, context: ctx });
     window.__room = room;
-    document.getElementById('st').textContent = 'גוררים לסיבוב, גלגלת לזום';
-    const vb = document.getElementById('viewbar');
-    vb.innerHTML = Object.entries(room.views).map(([k, n]) => `<button data-v="${k}" class="${k === (viewStudio.view || 'axo') ? 'on' : ''}">${n}</button>`).join('');
-    vb.onclick = e => { const b = e.target.closest('[data-v]'); if (!b) return; viewStudio.view = b.dataset.v; room.view(b.dataset.v); vb.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); };
-    const cs = document.getElementById('ctxSel');
-    cs.innerHTML = Object.entries(CONTEXTS).map(([k, n]) => `<option value="${k}" ${k === room.context ? 'selected' : ''}>${n}</option>`).join('');
-    cs.onchange = () => room.setContext(cs.value);
-    document.getElementById('realSeg').onclick = e => { const b = e.target.closest('[data-real]'); if (!b) return; room.setRealistic(b.dataset.real === '1'); e.currentTarget.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); };
-    document.getElementById('glb').onclick = () => room.exportGLB(`${it.id}.glb`).then(() => toast('המודל ירד'));
-    document.getElementById('png').onclick = () => { room.snapshot(`${it.id}.png`); toast('הצילום ירד'); };
-  } catch (err) {
-    document.getElementById('st').textContent = 'מנוע התלת־ממד לא נטען. רעננו את הדף.';
-    console.error(err);
+    if (cam) room.setCam(cam);
+    ctx = room.context;
   }
+  function panel(full) {
+    const A = arch(dna);
+    document.getElementById('prm').innerHTML = DIMS.map((d, k) => `<div class="prm"><b>${d.k}</b><span>${dna[k]}</span><em>${A[k]}</em></div>`).join('');
+    document.getElementById('rule').innerHTML = dist(dna, it.dna) ? 'שינית את הממדים. החדר נבנה מהערכים החדשים.' : 'החדר נבנה מחמשת הממדים של הדוגמה.';
+    document.getElementById('nearR').innerHTML = resonances(dna, null, 3).map(r => `<a href="#/c/${r.o.ch.id}/${r.o.id}" style="--c:${r.o.ch.color}"><span class="th" style="${thumbStyle(r.o)}"></span><span><span class="ch">${r.o.ch.lens}</span><div class="nm">${esc(r.o.name)}</div><div class="rule">משותף: ${esc(r.rule)}</div></span></a>`).join('');
+    if (full) {
+      document.getElementById('rad').innerHTML = radar([{ vals: dna, color: ch.color, main: true }, ...(dist(dna, it.dna) ? [{ vals: it.dna, color: '#888' }] : [])], { editable: true, size: 250 });
+      bindRadar(document.querySelector('#rad svg'), dna.slice(), ch.color, (d, moving) => {
+        dna = d; panel(!moving);
+        if (moving) { const tmp = document.createElement('div'); tmp.innerHTML = radar([{ vals: dna, color: ch.color, main: true }], { editable: true, size: 250 }); const svg = document.querySelector('#rad svg'); svg.querySelector('.mainp').setAttribute('points', tmp.querySelector('.mainp').getAttribute('points')); svg.querySelectorAll('.hdl').forEach((h, k) => { const n = tmp.querySelectorAll('.hdl')[k]; h.setAttribute('cx', n.getAttribute('cx')); h.setAttribute('cy', n.getAttribute('cy')); }); }
+        clearTimeout(tm); tm = setTimeout(build, moving ? 220 : 0);
+        history.replaceState(null, '', `#/studio/${it.id}?dna=${dna.join(',')}`);
+      });
+    }
+  }
+  build(); panel(true);
+  document.getElementById('st').textContent = 'גוררים לסיבוב, גלגלת לזום';
+  const vb = document.getElementById('viewbar');
+  vb.innerHTML = Object.entries(room.views).map(([k, n]) => `<button data-v="${k}" class="${k === view ? 'on' : ''}">${n}</button>`).join('');
+  vb.onclick = e => { const b = e.target.closest('[data-v]'); if (!b) return; view = viewStudio.view = b.dataset.v; cam = null; room.view(view); vb.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); };
+  const cs = document.getElementById('ctxSel');
+  cs.innerHTML = Object.entries(mod.CONTEXTS).map(([k, n]) => `<option value="${k}" ${k === ctx ? 'selected' : ''}>${n}</option>`).join('');
+  cs.onchange = () => { ctx = cs.value; room.setContext(ctx); };
+  document.getElementById('realSeg').onclick = e => { const b = e.target.closest('[data-real]'); if (!b) return; real = b.dataset.real === '1'; room.setRealistic(real); e.currentTarget.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); };
+  document.getElementById('reset').onclick = () => { dna = it.dna.slice(); panel(true); build(); history.replaceState(null, '', `#/studio/${it.id}`); };
+  document.getElementById('glb').onclick = () => room.exportGLB(`${it.id}.glb`).then(() => toast('המודל ירד'));
+  document.getElementById('png').onclick = () => { room.snapshot(`${it.id}.png`); toast('הצילום ירד'); };
 }
 
-// ---------- דפי הספר המקורי ----------
+// ================= דפי הספר: רשימה בטור =================
+function pageLabel(n) {
+  const its = ALL.filter(it => it.page === n), c = CHAPTERS.find(c => parseInt(c.cover.slice(1), 10) === n);
+  if (its.length) return { t: its.map(i => i.name).join(', '), c: its[0].ch };
+  if (c) return { t: `שער: ${c.lens}`, c };
+  return { t: n === 1 ? 'כריכה' : 'טקסט ומאמרים', c: null };
+}
 function viewPages(n) {
   n = Math.min(189, Math.max(1, +n || 1));
-  const owners = ALL.filter(it => it.page === n);
-  const chOwner = CHAPTERS.find(c => parseInt(c.cover.slice(1), 10) === n);
+  const L = pageLabel(n);
   app.innerHTML = `
   <section class="view pages">
+    <ol class="plist" id="plist">${Array.from({ length: 189 }, (_, i) => { const l = pageLabel(i + 1); return `<li><a href="#/pages/${i + 1}" class="${i + 1 === n ? 'on' : ''}" style="--c:${l.c?.color || '#bbb'}"><img loading="lazy" src="${pageSrc(i + 1)}" alt=""><span><b>${i + 1}</b>${esc(l.t)}</span></a></li>`; }).join('')}</ol>
     <div class="pg-stage">
-      <a class="btn quiet pg-prev" href="#/pages/${Math.max(1, n - 1)}">הקודם</a>
-      <figure class="a4"><img src="${pageSrc(n)}" alt="עמוד ${n} בספר המקורי"><figcaption>עמוד ${n} מתוך 189 · "${BOOK.title}", ${BOOK.date}</figcaption></figure>
-      <a class="btn quiet pg-next" href="#/pages/${Math.min(189, n + 1)}">הבא</a>
+      <a class="btn quiet" href="#/pages/${Math.max(1, n - 1)}" data-d="העמוד הקודם">הקודם</a>
+      <figure class="a4"><img src="${pageSrc(n)}" alt="עמוד ${n} בספר המקורי"><figcaption>עמוד ${n} מתוך 189<br>${esc(L.t)}</figcaption></figure>
+      <a class="btn quiet" href="#/pages/${Math.min(189, n + 1)}" data-d="העמוד הבא">הבא</a>
     </div>
     <aside class="side">
-      <div><h3>הדפים המקוריים</h3><p class="why">כמו שהם בספר, עם הקומפוזיציה והתמונות. תצוגת קנבה ברוחב 376 פיקסלים.</p></div>
-      ${owners.length || chOwner ? `<div><h3>בספר החי</h3><div class="res">${owners.map(o => `<a href="#/c/${o.ch.id}/${o.id}" style="--c:${o.ch.color}"><span class="th" style="${thumbStyle(o)}"></span><span><span class="ch">${o.ch.lens}</span><div class="nm">${esc(o.name)}</div></span></a>`).join('')}${chOwner ? `<a href="#/c/${chOwner.id}" style="--c:${chOwner.color}"><span class="th" style="background-image:url(${src(chOwner.cover)})"></span><span><span class="ch">שער פרק</span><div class="nm">${chOwner.title}</div></span></a>` : ''}</div></div>` : ''}
-      <div><h3>קפיצה לפרק</h3><div class="jump">${CHAPTERS.map(c => `<a href="#/pages/${Math.min(...c.items.filter(i => i.page).map(i => i.page), parseInt(c.cover.slice(1), 10))}" style="--c:${c.color}"><i></i>${c.n}. ${c.lens}</a>`).join('')}</div></div>
-      <div class="row"><a class="btn" href="${pageSrc(n)}" target="_blank" rel="noopener">פתיחת העמוד בלשונית</a></div>
+      <div class="row"><button class="btn" id="closeP" data-d="חזרה למקום שממנו נכנסת">סגירה</button></div>
+      <div><h3>הדפים המקוריים</h3><p class="why">כמו שהם בספר, עם הקומפוזיציה והתמונות.<br>הרשימה מימין היא המקרא: מספר העמוד, ומה יש בו.</p></div>
+      ${L.c ? `<div><h3>בספר החי</h3><div class="res">${ALL.filter(it => it.page === n).map(o => `<a href="#/c/${o.ch.id}/${o.id}" style="--c:${o.ch.color}"><span class="th" style="${thumbStyle(o)}"></span><span><span class="ch">${o.ch.lens}</span><div class="nm">${esc(o.name)}</div></span></a>`).join('') || `<a href="#/c/${L.c.id}" style="--c:${L.c.color}"><span class="th" style="background:${L.c.color}"></span><span><span class="ch">שער פרק</span><div class="nm">${L.c.lens}</div></span></a>`}</div></div>` : ''}
     </aside>
-    <div class="strip" id="strip">${Array.from({ length: 189 }, (_, i) => `<a href="#/pages/${i + 1}" class="${i + 1 === n ? 'on' : ''}" title="עמוד ${i + 1}"><img loading="lazy" src="${pageSrc(i + 1)}" alt=""></a>`).join('')}</div>
   </section>`;
   app.querySelector('.a4 img').addEventListener('click', () => lightbox({ img: pageSrc(n), title: `עמוד ${n} בספר המקורי` }));
-  document.querySelector('.strip a.on')?.scrollIntoView({ inline: 'center', block: 'nearest' });
-  viewPages.keys = { next: `#/pages/${Math.min(189, n + 1)}`, prev: `#/pages/${Math.max(1, n - 1)}` };
+  document.getElementById('closeP').onclick = () => { location.hash = viewPages.from || '#/'; };
+  document.querySelector('.plist a.on')?.scrollIntoView({ block: 'center' });
+  NAV.keys = { next: `#/pages/${Math.min(189, n + 1)}`, prev: `#/pages/${Math.max(1, n - 1)}` };
 }
 
-// ---------- נרטיבים ----------
+// ================= נרטיבים =================
 function viewNarratives() {
   const pick = {
     translator: ['prime', 'gevurah', 'gamma', 'hygge'],
@@ -536,98 +702,97 @@ function viewNarratives() {
   };
   app.innerHTML = `
   <section class="view narr">
-    <div class="narr-head">
-      <h1>חמישה ספרים<br>שמסתתרים בספר אחד</h1>
-      <p>כאמן בינה: חמישה קונספטים להוצאת ספר, סדרת מגזין ותערוכה. כל קונספט נשען על מה שכבר קיים בספר, ומציע צורה אחרת לקרוא אותו. <span class="mk">הספר הוא מאגר. הנרטיב הוא הבחירה.</span></p>
-    </div>
+    <div class="narr-head"><h1>חמישה ספרים<br>שמסתתרים בספר אחד</h1>
+      <p class="body">כאמן בינה: חמישה קונספטים להוצאת ספר, סדרת מגזין ותערוכה.<br>כל קונספט נשען על מה שכבר קיים בספר.<br><span class="mk">הספר הוא מאגר. הנרטיב הוא הבחירה.</span></p></div>
     <div class="narr-grid">${NARRATIVES.map(n => `
       <article class="n-card" style="--c:${n.color}">
         <div class="strip4">${(pick[n.id] || []).map(id => { const it = byId[id]; return it ? `<button data-id="${id}" title="${esc(it.name)}" style="${thumbStyle(it)}"></button>` : ''; }).join('')}</div>
-        <div class="in">
-          <div class="fmt">${n.format}</div>
-          <h2>${n.name}</h2>
-          <p class="line"><span class="mk">${n.line}</span></p>
-          <p>${n.body}</p>
+        <div class="in"><div class="fmt">${n.format}</div><h2>${n.name}</h2>
+          <p class="line"><span class="mk">${n.line}</span></p><p>${lines(n.body)}</p>
           <ul>${n.parts.map(p => `<li>${p}</li>`).join('')}</ul>
-          <div class="proof"><b>למה זה עובד:</b> ${n.proof}</div>
-        </div>
+          <div class="proof"><b>למה זה עובד:</b> ${n.proof}</div></div>
       </article>`).join('')}</div>
-    <div class="pub">
-      <div><h3>1. הספר המקורי</h3><p>189 עמודי קנבה. <a href="#/pages/1">לדפים</a></p></div>
-      <div><h3>2. הספר החי</h3><p>זיקוק, תנועה, אטלס ותהודות.</p></div>
-      <div><h3>3. גיליון ראשון</h3><p>נרטיב אחד, 24 עמודים, הדפסה ב-A4 מהאפליקציה.</p></div>
-      <div><h3>4. תערוכה</h3><p>החדרים מהסטודיו הופכים למודלים מודפסים, וההדמיות לקירות.</p></div>
-    </div>
   </section>`;
-  app.querySelector('.narr-grid').addEventListener('click', e => { const b = e.target.closest('[data-id]'); if (!b) return; const it = byId[b.dataset.id]; lightbox({ img: src(it.img), title: `${it.name} · ${it.ch.lens}`, page: it.page, color: it.ch.color }); });
+  app.querySelector('.narr-grid').addEventListener('click', e => { const b = e.target.closest('[data-id]'); if (!b) return; const it = byId[b.dataset.id]; lightbox({ img: USERIMG[it.id] || src(it.img), title: `${it.name} · ${it.ch.lens}`, page: it.page, color: it.ch.color }); });
 }
 
-// ---------- מקרא ----------
+// ================= מקרא =================
 function viewLegend() {
-  const motions = { fractal: 'עומק החזרה של הפרקטל', threshold: 'הסף: פתח, עותק או סינתזה', psy: 'קצב נשימה, ראות או פרטיות, לפי המרחב', wave: 'גל מוח בתדר האמיתי, יחסית', string: 'מיתר עומד, וסרגל אורך גל במטרים', glow: 'צבע הפליטה, ומסה אטומית: מרחף או שוקע', axis: 'כיוון: עלייה, ציר, מרכז, מנדלה או הקפה', compass: 'הכיוון שהמילה מסמנת', tree: 'עץ הספירות, הספירה הנוכחית מודגשת', number: 'הצורה של המספר', climate: 'לפי התופעה: רוח, שמש, לחות, אבק, צליל, גרדיאנט', flow: 'התופעה הפיזיקלית: עלייה, האצה, טפטוף, תהודה' };
   const count = Object.values(CUSTOM).reduce((s, a) => s + a.length, 0);
   app.innerHTML = `
   <section class="view legend">
     <h1>מקרא</h1>
-    <p class="intro">סימן אחד, משמעות אחת, בכל מסך. <span class="mk">צבע הוא תחום. מרקר הוא תובנה. עכביש הוא DNA.</span></p>
+    <p class="intro body">סימן אחד, משמעות אחת, בכל מסך.<br><span class="mk">צבע הוא פרק. מרקר הוא תובנה. עכביש הוא DNA.</span></p>
     <div class="lg-grid">
-      <div class="lg"><h2>צבע: התחום</h2><p class="why">כל פרק מקבל צבע אחד. הוא חוזר בכרטיס, בעיגול באטלס, בעכביש ובקו הציטוט. קישור לתחום אחר מקבל את הצבע שלו, שקוף.</p>
+      <div class="lg"><h2>צבע: הפרק</h2><p class="why">כל פרק מקבל צבע אחד.<br>הוא חוזר בסרגל, בעיגול באטלס, בעכביש ובקו הציטוט.<br>קישור לפרק אחר מקבל את הצבע שלו, שקוף.</p>
         <div class="swatches">${CHAPTERS.map(c => `<a href="#/c/${c.id}" style="--c:${c.color}"><i></i>${c.n}. ${c.lens}</a>`).join('')}</div></div>
-      <div class="lg"><h2>DNA: עכביש של חמישה ממדים</h2><p class="why">קו מלא הוא המרחב. קו מקווקו הוא תהודה מתחום אחר, בצבע שלו. 1 עד 5, קריאה פרשנית.</p>
-        ${radar([{ vals: byId.delta.dna, color: byId.delta.ch.color, main: true }, { vals: byId.do.dna, color: byId.do.ch.color }, { vals: byId.gevurah.dna, color: byId.gevurah.ch.color }], 230)}
-        <p class="why">דוגמה: דלתא, ובקו מקווקו דו וגבורה.</p></div>
-      <div class="lg"><h2>טקסט: חמישה פורמטים</h2><p class="why">כל סוג מידע נראה תמיד אותו דבר.</p>
+      <div class="lg"><h2>עכביש: חמישה ממדים</h2><p class="why">קו מלא: הדוגמה.<br>מקווקו: תהודה מפרק אחר, בצבע שלו.<br>דוגמה: דלתא, ובמקווקו דו וגבורה.</p>
+        ${radar([{ vals: byId.delta.dna, color: byId.delta.ch.color, main: true }, { vals: byId.do.dna, color: byId.do.ch.color }, { vals: byId.gevurah.dna, color: byId.gevurah.ch.color }], { size: 230 })}</div>
+      <div class="lg"><h2>טקסט: פורמט לכל סוג מידע</h2><p class="why">כל סוג מידע נראה תמיד אותו דבר.</p>
         <div class="signs">
           <div><b>תובנה</b><span class="ex"><span class="mk">עד 8 מילים, במרקר</span></span></div>
-          <div><b>המרחב</b><span class="ex">משפט אחד: חומר, אור, פתח</span></div>
+          <div><b>פרמטר</b><span class="ex"><span class="prm inline"><b>אור</b><span>בהיר (4)</span></span></span></div>
+          <div><b>המרחב</b><span class="ex body">משפט בכל שורה.</span></div>
           <div><b>ציטוט</b><span class="ex" style="border-right:3px solid #7a1f2b;padding-right:8px;font-family:var(--serif)">מילה במילה מהספר</span></div>
-          <div><b>הייקו</b><span class="ex" style="font-family:var(--serif)">שלוש שורות</span></div>
-          <div><b>טיפ ביצוע</b><span class="ex tip" style="padding:4px 8px"><b>ירוק:</b> מה עושים</span></div>
+          <div><b>כלי</b><span class="ex tool-note">טקסט קטן ואפור: הסבר על הכלי, לא תוכן</span></div>
         </div></div>
-      <div class="lg"><h2>תנועה: הפרמטר שנבחן</h2><p class="why">בפינת כל תמונה: שם הפרמטר, הערך שלו במרחב הזה, ופס יחסי. הערך משתנה בין מרחב למרחב.</p>
-        <div class="signs">${CHAPTERS.map(c => `<div><b style="color:${c.color}">${c.lens}</b><span class="ex">${motions[c.motion]}</span></div>`).join('')}</div></div>
-      <div class="lg"><h2>על מה הספר נשען</h2><p class="why">עובדה, הערכה ומגבלה, בנפרד.</p>
+      <div class="lg"><h2>תנועה: אחת לכל פרק</h2><p class="why">בכל פרק אותה אנימציה בכל הדוגמאות.<br>רק ערך הפרמטר משתנה, ולכן רואים את המנעד.<br>המד בפינה: שם הפרמטר, הערך ופס יחסי.</p>
+        <div class="signs">${CHAPTERS.map(c => `<div><b style="color:${c.color}">${c.lens}</b><span class="ex">${esc(scaleOf(c).label)}</span></div>`).join('')}</div></div>
+      <div class="lg"><h2>על מה הספר נשען</h2>
         <div class="signs">
-          <div><b>עובדה</b><span class="ex">טקסט, ציטוטים ותדרים: מתוך הספר. אורך גל: 343 מ׳ לשנייה חלקי התדר.</span></div>
-          <div><b>עובדה</b><span class="ex">מסות אטומיות של הגזים: מהטבלה המחזורית, מעוגלות.</span></div>
-          <div><b>הערכה</b><span class="ex">ערכי ה-DNA והתהודות: פרשנות של העורך.</span></div>
-          <div><b>מגבלה</b><span class="ex">התמונות המקוריות בספר הן קבצי 640 פיקסלים. כאן הן מוצגות מתצוגת קנבה, בפרופורציה המלאה ובלי חיתוך.</span></div>
+          <div><b>עובדה</b><span class="ex">טקסט, ציטוטים ותדרים: מתוך הספר.<br>אורך גל: 343 מ׳ לשנייה חלקי התדר.</span></div>
+          <div><b>עובדה</b><span class="ex">מסות אטומיות: מהטבלה המחזורית, מעוגלות.</span></div>
+          <div><b>הערכה</b><span class="ex">ערכי ה-DNA, התהודות והתרגום לאדריכלות: פרשנות של העורך.</span></div>
+          <div><b>חדש</b><span class="ex">יחס הזהב, מעגל וסימטריה שישית: דוגמאות חדשות לפרק המתמטיקה, לא מתוך הספר.</span></div>
+          <div><b>מגבלה</b><span class="ex">התמונות המקוריות הן קבצי 640 פיקסלים.<br>כאן מתצוגת קנבה, בפרופורציה המלאה.</span></div>
         </div></div>
-      <div class="lg"><h2>מרחבים שהוספת</h2><p class="why">${count ? `${count} מרחבים שמורים בדפדפן הזה.` : 'עוד לא הוספת מרחבים. מוסיפים מתוך פרק פתוח.'}</p>
+      <div class="lg"><h2>מה שהוספת</h2><p class="why">${count ? `${count} דוגמאות שמורות בדפדפן הזה.` : 'עוד לא הוספת דוגמאות.<br>מוסיפים מסרגל הדוגמאות בפרק פתוח.'}<br>${Object.keys(USERIMG).length} תמונות שלך במסגרות.</p>
         <div class="row"><button class="btn" id="expJ" ${count ? '' : 'disabled'}>ייצוא JSON</button><label class="btn">ייבוא JSON<input type="file" id="impJ" accept="application/json" hidden></label></div></div>
     </div>
   </section>`;
   document.getElementById('expJ').onclick = () => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(CUSTOM, null, 2)], { type: 'application/json' })); a.download = 'merchavei-bechira-custom.json'; a.click(); };
-  document.getElementById('impJ').onchange = async e => { try { const d = JSON.parse(await e.target.files[0].text()); Object.entries(d).forEach(([k, arr]) => { if (!CH[k]) return; arr.forEach(x => { if (!byId[x.id]) { (CUSTOM[k] ||= []).push(x); CH[k].items.push({ ...x, custom: true }); } }); }); saveCustom(CUSTOM); reindex(); byId = BYID(); toast('יובא'); viewLegend(); } catch { toast('הקובץ לא תקין'); } };
+  document.getElementById('impJ').onchange = async e => { try { const d = JSON.parse(await e.target.files[0].text()); Object.entries(d).forEach(([k, arr]) => { if (!CH[k]) return; arr.forEach(x => { if (!byId[x.id]) { (CUSTOM[k] ||= []).push(x); CH[k].items.push({ ...x, custom: true }); } }); }); lsSet(LS, CUSTOM); reindex(); toast('יובא'); viewLegend(); } catch { toast('הקובץ לא תקין'); } };
 }
 
-// ---------- ניתוב ----------
+// ================= ניתוב =================
+let lastHash = '#/';
 function route() {
-  const [, a, b, c] = (location.hash || '#/').split('/');
-  document.querySelectorAll('.nav a').forEach(n => n.classList.toggle('on', n.dataset.nav === (a || 'home')));
+  const [path, qs] = (location.hash || '#/').split('?');
+  const q = new URLSearchParams(qs || '');
+  let [, a, b, c] = path.split('/');
   document.querySelector('.lb')?.remove();
-  if (a !== 'c') document.querySelector('.chapter')?.remove();
-  if (a === 'c') viewChapter(b, c);
+  if (a === 'pages' && !lastHash.startsWith('#/pages')) viewPages.from = lastHash;
+  // לחיצה שנייה על הפרק הפעיל סוגרת ופותחת את שורת הדוגמאות
+  if (a === 'c' && c === '~') { NAV.collapsed = !NAV.collapsed; history.replaceState(null, '', `#/c/${b}`); c = undefined; }
+  else if (a === 'c' && (b !== NAV.ch?.id)) NAV.collapsed = false;
+  if (a === 'yesodot' || b === 'yesodot') b = 'math';
+  NAV.view = a || 'home';
+  NAV.ch = a === 'c' ? (CH[b] || CHAPTERS[0]) : a === 'studio' ? (byId[b] || byId.prime).ch : null;
+  NAV.it = a === 'c' ? (byId[c] && byId[c].ch === NAV.ch ? byId[c] : null) : a === 'studio' ? (byId[b] || byId.prime) : null;
+  NAV.keys = null;
+  document.querySelectorAll('.nav a').forEach(n => n.classList.toggle('on', n.dataset.nav === NAV.view));
+  chapterBar(); exampleRow();
+  if (a === 'c') NAV.it ? viewItem(NAV.ch, NAV.it) : viewGate(NAV.ch);
   else if (a === 'atlas') viewAtlas(b || '');
-  else if (a === 'studio') viewStudio(b);
+  else if (a === 'studio') viewStudio(b, q);
   else if (a === 'narratives') viewNarratives();
   else if (a === 'legend') viewLegend();
   else if (a === 'pages') viewPages(b);
   else viewHome();
-  if (a !== 'c') window.scrollTo(0, 0);
-  const t = a === 'c' ? (byId[c]?.name || CH[b]?.title) : { atlas: 'אטלס', studio: 'סטודיו', narratives: 'נרטיבים', legend: 'מקרא', pages: 'דפי הספר' }[a];
+  window.scrollTo(0, 0);
+  lastHash = location.hash;
+  const t = a === 'c' ? (NAV.it?.name || NAV.ch.lens) : { atlas: 'אטלס', studio: 'סטודיו', narratives: 'נרטיבים', legend: 'מקרא', pages: 'דפי הספר' }[a];
   document.title = t ? `${t} · מרחבי בחירה` : 'מרחבי בחירה';
 }
 window.addEventListener('hashchange', route);
 document.addEventListener('keydown', e => {
   if (document.querySelector('.lb') || e.target.closest('select,input,textarea')) return;
-  const k = document.querySelector('.chapter') ? viewChapter.keys : document.querySelector('.pages') ? viewPages.keys : null;
-  if (!k) return;
-  if (e.key === 'ArrowLeft') location.hash = k.next;
-  if (e.key === 'ArrowRight') location.hash = k.prev;
+  if (e.key === 'ArrowLeft' && NAV.keys?.next) location.hash = NAV.keys.next;
+  if (e.key === 'ArrowRight' && NAV.keys?.prev) location.hash = NAV.keys.prev;
 });
+document.getElementById('exrow').addEventListener('click', e => { if (e.target.id === 'addBtn') addExample(NAV.ch); if (e.target.closest('.step.dis')) e.preventDefault(); });
 
-// ---------- תפריט הלוגו ----------
+// תפריט הלוגו
 const logo = document.getElementById('logoBtn'), menu = document.getElementById('menu');
 logo.onclick = e => { e.stopPropagation(); menu.hidden = !menu.hidden; logo.setAttribute('aria-expanded', String(!menu.hidden)); };
 document.addEventListener('click', () => { menu.hidden = true; logo.setAttribute('aria-expanded', 'false'); });
@@ -636,6 +801,18 @@ menu.addEventListener('click', e => {
   if (act === 'print') window.print();
   if (act === 'link') navigator.clipboard?.writeText(location.href).then(() => toast('הקישור הועתק'), () => toast('ההעתקה נחסמה בדפדפן'));
   if (act === 'motion') { const s = document.body.classList.toggle('still'); e.target.textContent = s ? 'הפעלת תנועה' : 'עצירת תנועה'; toast(s ? 'התנועה נעצרה' : 'התנועה חזרה'); }
+});
+
+// הסבר שנפתח בתוך הכפתור, בריחוף
+document.addEventListener('mouseover', e => {
+  const b = e.target.closest('[data-d]'); const tip = document.getElementById('hoverTip');
+  if (!b) { tip.classList.remove('on'); return; }
+  tip.innerHTML = esc(b.dataset.d).replace(/\n/g, '<br>');
+  const r = b.getBoundingClientRect();
+  tip.classList.add('on');
+  const tw = tip.offsetWidth;
+  tip.style.top = `${r.bottom + 6}px`;
+  tip.style.left = `${Math.max(8, Math.min(innerWidth - tw - 8, r.left + r.width / 2 - tw / 2))}px`;
 });
 
 route();

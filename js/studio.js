@@ -242,8 +242,9 @@ export function buildRoom(host, item, accent, opt = {}) {
   }
   size();
   const ro = new ResizeObserver(size); ro.observe(host);
+  let alive = true;
   (function loop(now) {
-    if (!host.isConnected) { ro.disconnect(); renderer.dispose(); pmrem.dispose(); return; }
+    if (!alive || !host.isConnected) { ro.disconnect(); renderer.dispose(); pmrem.dispose(); return; }
     requestAnimationFrame(loop);
     if (anim) anim(now || performance.now());
     controls.update(); renderer.render(scene, camera);
@@ -258,6 +259,9 @@ export function buildRoom(host, item, accent, opt = {}) {
     context: ctx,
     view,
     setRealistic,
+    dispose() { alive = false; renderer.domElement.remove(); },
+    camState() { return { p: camera.position.clone(), t: controls.target.clone() }; },
+    setCam(c) { if (c) { camera.position.copy(c.p); controls.target.copy(c.t); } },
     setContext(k) { ctx = k; buildContext(k); ctxGroup.visible = realistic; },
     exportGLB(name) {
       return new Promise((res, rej) => new GLTFExporter().parse(room, glb => { download(new Blob([glb], { type: 'model/gltf-binary' }), name); res(); }, rej, { binary: true }));
