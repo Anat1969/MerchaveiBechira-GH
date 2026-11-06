@@ -2,7 +2,7 @@
 // הרצה: python3 -m http.server 8765 &  ואז  node tests/smoke.cjs
 const { chromium } = require('playwright');
 const BASE = process.env.BASE || 'http://localhost:8765/';
-const routes = ['', 'c/math', 'c/math/golden', 'studio/delta?dna=1,5,1,1,3', 'c/frequencies/theta', 'c/gases/xe', 'c/climate/saltline', 'atlas', 'atlas/delta', 'studio/gevurah', 'narratives', 'legend', 'pages/28', 'c/words/saudade'];
+const routes = ['', 'c/math', 'c/math/golden', 'studio/delta?dna=1,5,1,1,3', 'c/frequencies/theta', 'c/gases/xe', 'c/climate/saltline', 'atlas', 'atlas/delta', 'studio/gevurah', 'narratives', 'legend', 'pages/28', 'c/words/saudade', 'c/math/integral'];
 (async () => {
   const b = await chromium.launch({ args: ['--use-gl=swiftshader', '--enable-webgl', '--ignore-gpu-blocklist'] });
   let fail = 0;

@@ -1,4 +1,7 @@
-import { BOOK, CHAPTERS, NARRATIVES } from '../data/book.js';
+import { BOOK, CHAPTERS, NARRATIVES, FAMILIES } from '../data/book.js';
+
+// סדר הפרקים לפי שלוש המשפחות של הכריכה
+{ const order = FAMILIES.flatMap(f => f.chapters); CHAPTERS.sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id)); CHAPTERS.forEach((c, i) => { c.n = i + 1; c.family = FAMILIES.find(f => f.chapters.includes(c.id)); }); }
 import { attachFx, hexA } from './fx.js';
 
 // ================= נתונים =================
@@ -153,7 +156,7 @@ function chapterBar() {
   const prev = CHAPTERS[(i - 1 + CHAPTERS.length) % CHAPTERS.length], next = CHAPTERS[(i + 1) % CHAPTERS.length];
   el.innerHTML = `
     <a class="step" href="${chHref(i >= 0 ? prev : CHAPTERS[CHAPTERS.length - 1])}" data-d="הפרק הקודם">‹</a>
-    <div class="chs">${CHAPTERS.map(c => `<a href="${chHref(c)}" data-ch="${c.id}" class="${c === NAV.ch ? 'on' : ''} ${NAV.view === 'atlas' && atlasState.on.size && !atlasState.on.has(c.id) ? 'off' : ''}" style="--c:${c.color}" title="${esc(c.title)}"><b>${c.n}</b>${c.lens}</a>`).join('')}</div>
+    <div class="chs">${FAMILIES.map(f => `<div class="fam" style="--n:${f.chapters.length}"><span class="fl" data-d="${esc(`מרחבים ${f.name}: ${f.sub}. החלוקה מהכריכה של הספר.`)}">${f.name}</span>${CHAPTERS.filter(c => c.family === f).map(c => `<a href="${chHref(c)}" data-ch="${c.id}" class="${c === NAV.ch ? 'on' : ''} ${NAV.view === 'atlas' && atlasState.on.size && !atlasState.on.has(c.id) ? 'off' : ''}" style="--c:${c.color}" title="${esc(c.title)}"><b>${c.n}</b>${c.lens}</a>`).join('')}</div>`).join('')}</div>
     <a class="step" href="${chHref(i >= 0 ? next : CHAPTERS[0])}" data-d="הפרק הבא">›</a>`;
 }
 function chHref(c) {
@@ -286,19 +289,37 @@ function viewGate(ch) {
 }
 
 // ================= פרק: דוגמה =================
+function heWords(d) {
+  const r = k => Math.min(4, Math.max(0, Math.round(d[k]) - 1));
+  return [['חריץ אור יחיד ועמום', 'אור דמדומים רך', 'אור יום מאוזן', 'אור יום בהיר', 'אור צהריים מלא'][r(0)],
+    ['מבנה מרחף וקל', 'שלד דק', 'קירות בינוניים', 'קירות אבן עבים', 'מסה כבדה של בטון ואדמה'][r(1)],
+    ['חדר סגור ומוגן', 'פתח צר אחד', 'פתחים מאוזנים', 'חזית פתוחה', 'פתוח לאופק מכל צד'][r(2)],
+    ['שקט ועומד', 'קצב איטי', 'קצב רגוע', 'מסלול זורם', 'תנועה רציפה'][r(3)],
+    ['גוונים קרירים', 'אפור קריר', 'ניטרלי', 'גוונים חמים', 'עץ ואדמה'][r(4)]].join(', ');
+}
 function viewItem(ch, it) {
   const sc = scaleOf(ch), v = sc.val(it);
   const res = resonances(it.dna, ch, 3, it.id);
   const A = arch(it.dna);
-  const prompt = `${it.name}: ${it.insight}`;
   const en = `${enPrompt(it.name, it.space, it.dna)} --ar 1:1 --style raw --no text, words, writing, frame divisions`;
+  const he = `${it.space} ${heWords(it.dna)}. דמות אחת לקנה מידה.`;
+  const mine = USERIMG[it.id];
   app.innerHTML = `
   <section class="view item" style="--c:${ch.color}">
-    <div class="stage-img" id="art"></div>
+    <figure class="frame" id="frame" tabindex="0">
+      <div class="frame-img" id="art"></div>
+      <div class="frame-tools">
+        <button class="btn" id="cpP" data-d="${esc(en)}">העתקת הפרומפט</button>
+        <label class="btn" data-d="מעלים את התמונה שיצרתם. אפשר גם להדביק (Ctrl+V) או לגרור לתוך המסגרת">העלאת תמונה<input type="file" accept="image/*" hidden id="upl"></label>
+        ${mine ? `<button class="btn" id="rmImg" data-d="מחזיר את התמונה מהספר">תמונת הספר</button>` : ''}
+      </div>
+      <figcaption class="frame-cap"><b>${esc(it.insight)}</b><span>${esc(he)}</span></figcaption>
+    </figure>
     <article class="copy" id="copy">
-      <div class="crumb">פרק ${ch.n} · ${ch.lens} · דוגמה ${it.i + 1} מתוך ${ch.items.length}</div>
+      <div class="chtag"><span class="chn">פרק ${ch.n}</span><span class="chl">${ch.lens}</span><span class="fam-s">${ch.family?.name || ''}</span></div>
       <h1>${esc(it.name)}</h1>
-      <div class="sub"><span class="lat">${esc(it.sub)}</span></div>
+      <div class="sub"><span class="exn">דוגמה ${it.i + 1} מתוך ${ch.items.length}</span><span class="lat">${esc(it.sub)}</span></div>
+      ${it.sci ? `<div class="sci"><div class="lab">הסבר מדעי</div><p>${lines(it.sci)}</p></div>` : ''}
       <p class="ins"><span class="mk">${esc(it.insight)}</span></p>
       <div class="params">
         <div class="prm scale"><b>${esc(sc.label)}</b><span>${esc(sc.text(v, it))}</span></div>
@@ -308,17 +329,7 @@ function viewItem(ch, it) {
       ${it.quote ? (it.haiku ? `<div><div class="lab">הייקו מתוך הספר</div><div class="haiku">${esc(it.quote).replace(/ \/ /g, '\n')}</div></div>`
         : `<blockquote class="quote">${lines(it.quote)}<cite>${it.custom ? 'נוסף על ידך' : it.src === 'new' ? 'דוגמה חדשה, לא מתוך הספר' : `מתוך "${BOOK.title}"`}</cite></blockquote>`) : ''}
       ${it.tip ? `<div class="tip"><b>טיפ ביצוע:</b> ${lines(it.tip)}</div>` : ''}
-      <div class="mine">
-        <div class="lab">הפרומפט, והתמונה שלך</div>
-        <div class="prompt"><b>${esc(prompt)}</b><span class="en">${esc(en)}</span></div>
-        <div class="row"><button class="btn" id="cpP" data-d="מעתיק את הפרומפט. מדביקים במידג׳רני, ואת התמונה שיוצאת מחזירים למסגרת כאן">העתקת הפרומפט</button></div>
-        <figure class="drop" id="drop" tabindex="0" data-d="מדביקים (Ctrl+V), גוררים או בוחרים קובץ">
-          ${USERIMG[it.id] ? `<img src="${USERIMG[it.id]}" alt="${esc(it.name)}">` : `<span>הדבקה, גרירה או <label class="lnk">בחירת קובץ<input type="file" accept="image/*" hidden id="upl"></label></span>`}
-          <figcaption>${esc(it.insight)}</figcaption>
-        </figure>
-        ${USERIMG[it.id] ? `<button class="lnk" id="rmImg">הסרת התמונה שלי</button>` : ''}
-      </div>
-      <div class="src-row">${it.page ? `<button class="lnk" data-page="${it.page}">הדף המקורי בספר, עמוד ${it.page}</button>` : ''}<span>${it.page ? 'הדמיית AI מתוך הספר' : it.custom ? 'נוסף על ידך' : 'הדמיה שנבנתה מהמודל התלת־ממדי'}</span>${it.custom ? `<button class="lnk" id="delCustom">מחיקת הדוגמה</button>` : ''}</div>
+      <div class="src-row">${it.page ? `<button class="lnk" data-page="${it.page}">הדף המקורי בספר, עמוד ${it.page}</button>` : ''}<span>${mine ? 'התמונה שלך' : it.page ? 'הדמיית AI מתוך הספר' : it.custom ? 'נוסף על ידך' : 'הדמיה מהמודל התלת־ממדי'}</span>${it.custom ? `<button class="lnk" id="delCustom">מחיקת הדוגמה</button>` : ''}</div>
     </article>
     <aside class="side">
       <div><h3>העכביש: הדוגמה ותהודותיה</h3><p class="why">קו מלא: הדוגמה.<br>מקווקו: קרובות מתחומים אחרים, בצבע התחום שלהן.</p>
@@ -332,7 +343,7 @@ function viewItem(ch, it) {
       <div class="row"><a class="btn" href="#/studio/${it.id}" data-d="החדר שנבנה מחמשת הממדים, עם מכוונים">תלת־ממד</a><a class="btn" href="#/atlas/${it.id}" data-d="הדוגמה בין כל הדוגמאות">באטלס</a></div>
     </aside>
   </section>`;
-  const img = USERIMG[it.id] || src(it.img);
+  const img = mine || src(it.img);
   document.getElementById('art').appendChild(live(img, ch.motion, { color: ch.color, alt: it.name, page: it.page, sv: v, frac: sc.f(v), dna: it.dna, glow: it.glow, label: sc.label, valueText: sc.text(v, it) }));
   const sec = app.querySelector('.item');
   sec.addEventListener('click', e => {
@@ -341,8 +352,8 @@ function viewItem(ch, it) {
     if (e.target.id === 'delCustom') delCustom(it.id);
     if (e.target.id === 'rmImg') { delete USERIMG[it.id]; lsSet(LSI, USERIMG); route(); }
   });
-  document.getElementById('cpP').onclick = () => navigator.clipboard?.writeText(`${prompt}\n${en}`).then(() => toast('הפרומפט הועתק'), () => toast('ההעתקה נחסמה בדפדפן'));
-  bindDrop(document.getElementById('drop'), it);
+  document.getElementById('cpP').onclick = () => navigator.clipboard?.writeText(en).then(() => toast('הפרומפט הועתק. אחרי שיוצרים, מעלים את התמונה לכאן'), () => toast('ההעתקה נחסמה בדפדפן'));
+  bindDrop(document.getElementById('frame'), it);
 }
 
 function bindDrop(drop, it) {
@@ -352,12 +363,12 @@ function bindDrop(drop, it) {
     r.onload = () => {
       const im = new Image();
       im.onload = () => {
-        const s = Math.min(1, 1024 / Math.max(im.width, im.height)), c = document.createElement('canvas');
+        const s = Math.min(1, 1400 / Math.max(im.width, im.height)), c = document.createElement('canvas');
         c.width = Math.round(im.width * s); c.height = Math.round(im.height * s);
         c.getContext('2d').drawImage(im, 0, 0, c.width, c.height);
         USERIMG[it.id] = c.toDataURL('image/jpeg', .86);
-        if (!lsSet(LSI, USERIMG)) { toast('אין מקום בדפדפן לתמונה נוספת'); return; }
-        toast('התמונה נשמרה במסגרת'); route();
+        if (!lsSet(LSI, USERIMG)) { delete USERIMG[it.id]; toast('אין מקום בדפדפן לתמונה נוספת'); return; }
+        toast('התמונה נכנסה למסגרת'); route();
       };
       im.src = r.result;
     };
@@ -366,9 +377,8 @@ function bindDrop(drop, it) {
   drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('over'); });
   drop.addEventListener('dragleave', () => drop.classList.remove('over'));
   drop.addEventListener('drop', e => { e.preventDefault(); drop.classList.remove('over'); take(e.dataTransfer.files[0]); });
-  drop.addEventListener('paste', e => { const f = [...e.clipboardData.items].find(x => x.type.startsWith('image/')); if (f) take(f.getAsFile()); });
-  document.getElementById('upl')?.addEventListener('change', e => take(e.target.files[0]));
-  drop.addEventListener('click', e => { if (drop.querySelector('img') && !e.target.closest('label')) lightbox({ img: drop.querySelector('img').src, title: it.insight, color: it.ch.color }); });
+  document.addEventListener('paste', function onPaste(e) { if (!drop.isConnected) { document.removeEventListener('paste', onPaste); return; } const f = [...(e.clipboardData?.items || [])].find(x => x.type.startsWith('image/')); if (f) take(f.getAsFile()); });
+  drop.querySelector('#upl')?.addEventListener('change', e => take(e.target.files[0]));
 }
 
 // ================= הוספת דוגמה =================
@@ -381,13 +391,28 @@ function enPrompt(name, space, dna) {
     ['cool tones', 'cool grey', 'neutral', 'warm tones', 'warm wood and earth'][r(4)]];
   return `Architectural living space embodying "${name}": ${space}. ${w.join(', ')}. one human figure for scale, no decoration. Documentary realism, Professional architecture photography, 1:1`;
 }
+// מילוי מקצועי: מודל שפה חינמי (Pollinations), בלי מפתח. התוצאה מסומנת לבדיקה.
+async function aiFill(ch, name) {
+  const ex = ch.items.filter(x => !x.custom).slice(0, 3).map(x => ({ name: x.name, insight: x.insight, space: x.space, sci: x.sci, dna: x.dna }));
+  const prompt = `אתה עורך של ספר אדריכלות מקצועי, "מרחבי בחירה". הפרק: "${ch.lens}" (${ch.thesis}).
+כל דוגמה בפרק מתרגמת מושג למרחב מגורים. חמשת הממדים, 1 עד 5: אור (חושך-בהירות), מסה (ריחוף-כובד), פתיחות (מוגן-פתוח), תנועה (עצירה-זרימה), חום (קריר-חם).
+דוגמאות קיימות: ${JSON.stringify(ex)}
+המושג החדש: "${name}".
+החזר JSON בלבד, בעברית תקינה, עם השדות: insight (תובנה, עד 8 מילים), space (תיאור המרחב האדריכלי: חומר, אור, פתח, עד 20 מילים), sci (הסבר מדעי מדויק, משפט או שניים, עם עובדה, שם או שנה), quote (משפט פואטי קצר), dna (מערך של 5 מספרים שלמים).`;
+  const res = await fetch(`https://text.pollinations.ai/${encodeURIComponent(prompt)}?model=openai&json=true&seed=${Date.now() % 9999}`);
+  const t = await res.text();
+  const j = JSON.parse(t.slice(t.indexOf('{'), t.lastIndexOf('}') + 1));
+  return j;
+}
 function addExample(ch) {
   const id = `u${Date.now().toString(36)}`;
   lightbox({ title: `דוגמה חדשה בפרק ${ch.n}: ${ch.lens}`, color: ch.color, html: `
     <form class="addf" id="addf" style="--c:${ch.color}">
       <div class="addf-cols">
         <div>
-          <label>שם המושג<input name="name" required maxlength="40" placeholder="דוגמה: מדבר שקט"></label>
+          <label>שם המושג<span class="namerow"><input name="name" required maxlength="40" placeholder="דוגמה: אינטגרל"><button type="button" class="btn primary" id="aiFill" data-d="מודל שפה ממלא את כל השדות ברמה מקצועית, לפי הפרק. בודקים ומתקנים לפני שמירה">מילוי מקצועי</button></span></label>
+          <p class="tool-note" id="aiNote">כותבים רק את שם המושג, ולוחצים "מילוי מקצועי".</p>
+          <label>הסבר מדעי, משפט או שניים<textarea name="sci" maxlength="240" rows="2" placeholder="דוגמה: האינטגרל סוכם אינסוף פרוסות דקות לשלם רציף."></textarea></label>
           <label>תובנה, עד 8 מילים<input name="insight" required maxlength="60" placeholder="דוגמה: השקט הוא חומר בנייה."></label>
           <label>המרחב, עד 20 מילים<textarea name="space" required maxlength="160" rows="3" placeholder="דוגמה: חצר שקועה, קיר אבן עבה, חריץ אור אחד בצהריים."></textarea></label>
           <label>ציטוט או הייקו, רשות<input name="quote" maxlength="120"></label>
@@ -395,25 +420,34 @@ function addExample(ch) {
           <div id="addRadar"></div>
         </div>
         <div class="addf-out">
-          <div class="lab">פרומפט למידג׳רני, מתעדכן תוך כדי</div>
-          <div class="prompt" id="addPr"></div>
+          <figure class="drop" id="addDrop" tabindex="0"><span>התמונה תופיע כאן.<br>מדביקים, גוררים, או יוצרים.</span><figcaption id="addCap"></figcaption></figure>
           <div class="row"><button type="button" class="btn" id="cpPr">העתקת הפרומפט</button><button type="button" class="btn" id="genImg" data-d="שירות חינמי (Pollinations), בלי מפתח, כ-20 שניות">יצירת תמונה</button></div>
-          <figure class="drop" id="addDrop" tabindex="0"><span>התמונה תופיע כאן. אפשר גם להדביק או לגרור.</span><figcaption id="addCap"></figcaption></figure>
           <div class="row"><button class="btn primary" type="submit">שמירה בפרק</button><button class="btn" type="button" id="cancelAdd">ביטול</button></div>
           <p class="tool-note">נשמר בדפדפן הזה בלבד.<br>מעבירים בייצוא מהמקרא.</p>
         </div>
       </div>
     </form>` });
-  const f = document.getElementById('addf'), pr = document.getElementById('addPr');
+  const f = document.getElementById('addf');
   let dna = [3, 3, 3, 3, 3], imgUrl = '';
   const drawRadar = () => {
     document.getElementById('addRadar').innerHTML = radar([{ vals: dna, color: ch.color, main: true }], { editable: true, size: 240 });
     bindRadar(document.querySelector('#addRadar svg'), dna.slice(), ch.color, (d, moving) => { dna = d; upd(); if (!moving) drawRadar(); else { const svg = document.querySelector('#addRadar svg'); const tmp = document.createElement('div'); tmp.innerHTML = radar([{ vals: dna, color: ch.color, main: true }], { editable: true, size: 240 }); svg.querySelector('.mainp').setAttribute('points', tmp.querySelector('.mainp').getAttribute('points')); svg.querySelectorAll('.hdl').forEach((h, k) => { h.setAttribute('cx', tmp.querySelectorAll('.hdl')[k].getAttribute('cx')); h.setAttribute('cy', tmp.querySelectorAll('.hdl')[k].getAttribute('cy')); }); } });
   };
-  const read = () => ({ name: f.name.value.trim(), insight: f.insight.value.trim(), space: f.space.value.trim(), quote: f.quote.value.trim(), dna: dna.map(v => Math.round(v)) });
-  const upd = () => { const v = read(); document.getElementById('addCap').textContent = v.insight; pr.innerHTML = `<b>${esc(v.name || 'המושג')}: ${esc(v.insight)}</b><span class="en">${esc(enPrompt(v.name || 'concept', v.space, v.dna))} --ar 1:1 --style raw --no text, words, writing, frame divisions</span>`; };
+  const read = () => ({ name: f.name.value.trim(), insight: f.insight.value.trim(), space: f.space.value.trim(), sci: f.sci.value.trim(), quote: f.quote.value.trim(), dna: dna.map(v => Math.round(v)) });
+  const enP = () => { const v = read(); return `${enPrompt(v.name || 'concept', v.space, v.dna)} --ar 1:1 --style raw --no text, words, writing, frame divisions`; };
+  const upd = () => { const v = read(); document.getElementById('addCap').innerHTML = `<b>${esc(v.insight)}</b><br><span>${esc(v.space)} ${esc(heWords(v.dna))}</span>`; document.getElementById('cpPr').dataset.d = enP(); };
   f.addEventListener('input', upd); drawRadar(); upd();
-  document.getElementById('cpPr').onclick = () => navigator.clipboard?.writeText(pr.innerText).then(() => toast('הפרומפט הועתק'), () => toast('ההעתקה נחסמה בדפדפן'));
+  document.getElementById('cpPr').onclick = () => navigator.clipboard?.writeText(enP()).then(() => toast('הפרומפט הועתק'), () => toast('ההעתקה נחסמה בדפדפן'));
+  document.getElementById('aiFill').onclick = async () => {
+    const name = f.name.value.trim(); if (!name) { toast('קודם שם המושג'); return; }
+    const note = document.getElementById('aiNote'); note.textContent = 'ממלא…';
+    try {
+      const r = await aiFill(ch, name);
+      f.insight.value = r.insight || ''; f.space.value = r.space || ''; f.sci.value = r.sci || ''; f.quote.value = r.quote || '';
+      if (Array.isArray(r.dna) && r.dna.length === 5) { dna = r.dna.map(x => Math.max(1, Math.min(5, Math.round(+x) || 3))); drawRadar(); }
+      upd(); note.textContent = 'מולא על ידי מודל שפה. בודקים ומתקנים לפני שמירה.';
+    } catch { note.innerHTML = '<span style="color:var(--bad)">המודל לא ענה. נסו שוב, או מלאו ידנית.</span>'; }
+  };
   document.getElementById('cancelAdd').onclick = () => document.querySelector('.lb')?.remove();
   const box = document.getElementById('addDrop');
   const show = u => { imgUrl = u; box.querySelector('span, img')?.remove(); const im = new Image(); im.src = u; im.alt = ''; box.prepend(im); };
