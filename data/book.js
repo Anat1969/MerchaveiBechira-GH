@@ -26,9 +26,9 @@ export const CHAPTERS = [
     lead: 'בינה מלאכותית גילתה דפוס נסתר בפרויקטים שלי. ומכאן השאלה: אם לי יש דפוס, אולי לכל אדם יש.',
     quote: 'רובנו לא בוחרים את הבתים שלנו. אנחנו נבחרים להם.',
     items: [
-      { id: 'prime', name: 'מספר ראשוני', sub: 'Prime', insight: 'שלם שאינו מתחלק.', space: 'חלל אחד בלי קירות פנימיים, חומר אחד, כניסה אחת, מקור אור אחד.', quote: 'זהו בית לאדם שרוצה להיות שלם עם עצמו.', dna: [4, 4, 4, 2, 2], img: null },
+      { id: 'prime', name: 'מספר ראשוני', sub: 'Prime', insight: 'שלם שאינו מתחלק.', space: 'חלל אחד בלי קירות פנימיים, חומר אחד, כניסה אחת, מקור אור אחד.', quote: 'זהו בית לאדם שרוצה להיות שלם עם עצמו.', dna: [4, 4, 4, 2, 2], img: 'gen-prime' },
       { id: 'saudade', name: 'געגוע', sub: 'Saudade', insight: 'לחיות עם הכאב, ביופי.', space: 'חללים ריקים מכוונים, חומרים עם זיכרון, חלון אל אופק בלתי מושג, אור דמדומים.', quote: 'נוכחות של היעדרות.', dna: [2, 3, 3, 1, 4], img: 'p162' },
-      { id: 'fractal', name: 'פרקטל', sub: 'Fractal', insight: 'כל פרט מכיל את השלם.', space: 'בית בתוך בית: כל חדר משכפל את מבנה הבית כולו, בקנה מידה קטן יותר.', quote: 'השלם נמצא בתוך כל אחד מחלקיו.', dna: [3, 3, 3, 3, 3], img: null },
+      { id: 'fractal', name: 'פרקטל', sub: 'Fractal', insight: 'כל פרט מכיל את השלם.', space: 'בית בתוך בית: כל חדר משכפל את מבנה הבית כולו, בקנה מידה קטן יותר.', quote: 'השלם נמצא בתוך כל אחד מחלקיו.', dna: [3, 3, 3, 3, 3], img: 'gen-fractal' },
     ],
   },
   {
@@ -43,7 +43,7 @@ export const CHAPTERS = [
     ],
   },
   {
-    id: 'psychology', n: 3, cover: 'p017', lens: 'פסיכולוגיה', title: 'הפרעות', color: '#b8862b', motion: 'breath',
+    id: 'psychology', n: 3, cover: 'p017', lens: 'פסיכולוגיה', title: 'הפרעות', color: '#b8862b', motion: 'psy',
     thesis: 'הבית הוא מערכת עצבים.',
     lead: 'קירות, אור, חומר ותנועה יכולים לרכך חרדה ולהחזיר תחושת מסוגלות.',
     quote: 'הבית שאנו בונים בחוץ הוא תמיד שיקוף של הבית שאנו בונים בפנים.',
@@ -56,7 +56,7 @@ export const CHAPTERS = [
     ],
   },
   {
-    id: 'frequencies', n: 4, cover: 'p019', lens: 'פיזיקה', title: 'תדרים', color: '#2a6f97', motion: 'wave',
+    id: 'frequencies', n: 4, closed: true, cover: 'p019', lens: 'פיזיקה', title: 'תדרים', color: '#2a6f97', motion: 'wave',
     thesis: 'אדריכלות נמדדת בהרץ, לא במטרים.',
     lead: 'חמישה תדרי מוח, חמישה מבנים בנוף. כל ביקור הוא כוונון מחדש של התודעה.',
     quote: 'אינטליגנציה אינה מחליפה אינטואיציה. היא מגבירה אותה לתדרים שלא שמענו קודם.',
@@ -69,7 +69,7 @@ export const CHAPTERS = [
     ],
   },
   {
-    id: 'notes', n: 5, cover: 'p032', lens: 'מוזיקה', title: 'תווים', color: '#6a4c93', motion: 'string',
+    id: 'notes', n: 5, closed: true, cover: 'p032', lens: 'מוזיקה', title: 'תווים', color: '#6a4c93', motion: 'string',
     thesis: 'אורך הגל קובע את גודל החדר.',
     lead: 'גלים ארוכים צריכים נפח ומסה. גלים קצרים חיים במרחב דחוס. המבנה לא מסמל את הצליל, הוא מהדהד אותו.',
     quote: 'אדריכלות היא מוזיקה קפואה. מה קורה כשמפשירים אותה?',
@@ -84,7 +84,7 @@ export const CHAPTERS = [
     ],
   },
   {
-    id: 'gases', n: 6, cover: 'p049', lens: 'כימיה', title: 'גזים אצילים', color: '#d1495b', motion: 'glow',
+    id: 'gases', n: 6, closed: true, cover: 'p049', lens: 'כימיה', title: 'גזים אצילים', color: '#d1495b', motion: 'glow',
     thesis: 'מינימליזם הוא שיטה, לא סגנון.',
     lead: 'שפה עיצובית אחת, ומשתנה אחד: הגז. צפיפות לאחיזת קרקע, ספקטרום לצבע האור, מוליכות לעובי המעטפת.',
     quote: 'לפעמים אדריכלות מתחילה מנשימה של אטום.',
@@ -134,7 +134,7 @@ export const CHAPTERS = [
     ],
   },
   {
-    id: 'sefirot', n: 9, cover: 'p086', lens: 'קבלה', title: 'עץ החיים', color: '#b08d2e', motion: 'tree',
+    id: 'sefirot', n: 9, closed: true, cover: 'p086', lens: 'קבלה', title: 'עץ החיים', color: '#b08d2e', motion: 'tree',
     thesis: 'הספירות הן אדריכלות של נוכחות.',
     lead: 'פעם ראינו בהן סמלים וכתרים של אור נסתר. היום אפשר לראות בהן חדרים.',
     quote: 'אור לפני צורה, שקט מלמד נשימה. אין עוד, ויש הכול.',
@@ -152,7 +152,7 @@ export const CHAPTERS = [
     ],
   },
   {
-    id: 'numbers', n: 10, cover: 'p090', lens: 'גמטריה', title: 'עיר המספרים', color: '#3d405b', motion: 'number',
+    id: 'numbers', n: 10, closed: true, cover: 'p090', lens: 'גמטריה', title: 'עיר המספרים', color: '#3d405b', motion: 'number',
     thesis: 'כל מספר הוא צורה, צליל וחדר.',
     lead: 'מסע בין אנרגיות, מרחבים ותודעה. מהנקודה הבוערת ועד המעגל שנמס לאור.',
     quote: 'עשר מזכיר שכל מסע מסתיים באחד.',
@@ -170,7 +170,7 @@ export const CHAPTERS = [
     ],
   },
   {
-    id: 'climate', n: 11, cover: 'p104', lens: 'סביבה', title: 'המיקרו־אקלים ככתב יד', color: '#4f772d', motion: 'wind',
+    id: 'climate', n: 11, cover: 'p104', lens: 'סביבה', title: 'המיקרו־אקלים ככתב יד', color: '#4f772d', motion: 'climate',
     thesis: 'רוח, שמש ולחות כותבים על הקיר.',
     lead: 'הבית לא נלחם באקלים. הוא קורא אותו, ומשאיר עדות: קו מלח, קו אבק, טל בשחר.',
     quote: 'הקיר אינו מפריד בין פנים לחוץ. הוא נושם ביניהם.',
