@@ -1,4 +1,4 @@
-import { BOOK, CHAPTERS, NARRATIVES, FAMILIES } from '../data/book.js';
+import { BOOK, CHAPTERS, NARRATIVES, FAMILIES, DIM_MODEL, CHAPTER_MODELS } from '../data/book.js';
 
 // סדר הפרקים לפי שלוש המשפחות של הכריכה
 { const order = FAMILIES.flatMap(f => f.chapters); CHAPTERS.sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id)); CHAPTERS.forEach((c, i) => { c.n = i + 1; c.family = FAMILIES.find(f => f.chapters.includes(c.id)); }); }
@@ -63,6 +63,28 @@ function arch(d) {
     `${Math.round(T * 3)} עמודים בקצב, חדר באורך ${(6 + T * 2.6).toFixed(0)} מ׳`,
     `${['גוונים קרירים', 'אפור קריר', 'ניטרלי', 'גוונים חמים', 'עץ ואדמה'][Math.min(4, Math.max(0, Math.round(H) - 1))]}`,
   ];
+}
+
+// הרווחה של האדם: שני הממדים הבולטים של הדוגמה, ומה הם עושים לגוף ולנפש
+function wellOf(dna) {
+  return DIMS.map((d, k) => ({ k, v: dna[k], s: Math.abs(dna[k] - 3) })).filter(x => x.s >= 1).sort((a, b) => b.s - a.s).slice(0, 2)
+    .map(x => ({ k: x.k, v: x.v, t: x.v > 3 ? DIM_MODEL[x.k].high : DIM_MODEL[x.k].low }));
+}
+// מה השתנה לעומת הדוגמה הקודמת בסולם של הפרק
+function changeFrom(prev, it) {
+  return DIMS.map((d, k) => ({ k, a: prev.dna[k], b: it.dna[k] })).filter(x => x.a !== x.b)
+    .sort((x, y) => Math.abs(y.b - y.a) - Math.abs(x.b - x.a));
+}
+function modelBlock(ch, compact) {
+  const m = CHAPTER_MODELS[ch.id]; if (!m) return '';
+  return `<div class="model-b">
+    <div class="lab">הפרמטרים של התחום</div>
+    <div class="mparams">${m.params.map(p => `<div><b>${esc(p.n)}</b><span>${esc(p.d)}</span></div>`).join('')}</div>
+    <div class="lab">איך הם הופכים לאדריכלות</div>
+    <div class="mrules">${m.rules.map(([p, k, dir, why]) => `<div><b>${esc(p)}</b><i class="${dir > 0 ? 'up' : dir < 0 ? 'down' : 'eq'}">${dir > 0 ? 'עולה' : dir < 0 ? 'יורד' : 'קובע'}</i><b class="dim">${DIMS[k].k}</b><span>${esc(why)}</span></div>`).join('')}</div>
+    ${compact ? '' : `<div class="lab">מה משתנה בתוך הפרק</div><p class="body">${lines(m.within)}</p>`}
+    <div class="well"><div class="lab">הרווחה של האדם</div><p>${lines(m.wellbeing)}</p></div>
+  </div>`;
 }
 
 function resonances(dna, exceptCh, n = 3, exceptId) {
@@ -156,7 +178,10 @@ function chapterBar() {
   const prev = CHAPTERS[(i - 1 + CHAPTERS.length) % CHAPTERS.length], next = CHAPTERS[(i + 1) % CHAPTERS.length];
   el.innerHTML = `
     <a class="step" href="${chHref(i >= 0 ? prev : CHAPTERS[CHAPTERS.length - 1])}" data-d="הפרק הקודם">‹</a>
-    <div class="chs">${FAMILIES.map(f => `<div class="fam" style="--n:${f.chapters.length}"><span class="fl" data-d="${esc(`מרחבים ${f.name}: ${f.sub}. החלוקה מהכריכה של הספר.`)}">${f.name}</span>${CHAPTERS.filter(c => c.family === f).map(c => `<a href="${chHref(c)}" data-ch="${c.id}" class="${c === NAV.ch ? 'on' : ''} ${NAV.view === 'atlas' && atlasState.on.size && !atlasState.on.has(c.id) ? 'off' : ''}" style="--c:${c.color}" title="${esc(c.title)}"><b>${c.n}</b>${c.lens}</a>`).join('')}</div>`).join('')}</div>
+    <div class="chs2">
+      ${FAMILIES.map(f => `<span class="famrow ${NAV.ch?.family === f ? 'on' : ''}" style="grid-column: span ${f.chapters.length}" data-d="${esc(`מרחבים ${f.name}: ${f.sub}. החלוקה מהכריכה של הספר.`)}">מרחבים ${f.name} <small>${f.sub}</small></span>`).join('')}
+      ${CHAPTERS.map(c => `<a href="${chHref(c)}" data-ch="${c.id}" class="${c === NAV.ch ? 'on' : ''} ${NAV.view === 'atlas' && atlasState.on.size && !atlasState.on.has(c.id) ? 'off' : ''}" style="--c:${c.color}" title="${esc(c.title)}"><b>${c.n}</b>${c.lens}</a>`).join('')}
+    </div>
     <a class="step" href="${chHref(i >= 0 ? next : CHAPTERS[0])}" data-d="הפרק הבא">›</a>`;
 }
 function chHref(c) {
@@ -246,6 +271,7 @@ function viewGate(ch) {
       <p class="ins"><span class="mk">${esc(ch.thesis)}</span></p>
       <p class="body">${lines(ch.lead)}</p>
       <blockquote class="quote">${lines(ch.quote)}<cite>${ch.id === 'math' ? 'מתוך המאמר הפותח של הספר' : `מתוך "${BOOK.title}"`}</cite></blockquote>
+      ${modelBlock(ch)}
       <div class="near" id="near"></div>
       <div class="row"><a class="btn" id="toStudio" data-d="פותח את החדר שמתאים לנקודה בסולם">החדר בנקודה הזו, בתלת־ממד</a>
       <button class="btn" data-page="${parseInt(ch.cover.slice(1), 10)}" data-d="העמוד בספר המקורי">הדף בספר</button></div>
@@ -326,6 +352,11 @@ function viewItem(ch, it) {
         ${DIMS.map((d, k) => `<div class="prm"><b>${d.k}</b><span>${word(k, it.dna[k])} (${it.dna[k]})</span><em>${A[k]}</em></div>`).join('')}
       </div>
       <div><div class="lab">המרחב</div><p class="body">${lines(it.space)}</p></div>
+      ${(() => { const srt = [...ch.items].sort((a, b) => sc.val(a) - sc.val(b)); const j = srt.indexOf(it); const prev = srt[j - 1]; const ch2 = prev ? changeFrom(prev, it) : [];
+        const W = wellOf(it.dna);
+        return `<div class="well"><div class="lab">הרווחה של האדם בחלל הזה</div>${W.length ? W.map(w => `<p><b>${DIMS[w.k].k} ${w.v > 3 ? 'גבוה' : 'נמוך'} (${w.v}):</b> ${esc(w.t)}</p>`).join('') : '<p>כל הממדים מאוזנים. חלל ניטרלי, שמתאים לשימוש מגוון.</p>'}</div>
+        ${prev ? `<div class="chg"><div class="lab">מה השתנה מהדוגמה הקודמת בסולם: <a href="#/c/${ch.id}/${prev.id}">${esc(prev.name)}</a></div>${ch2.length ? ch2.map(x => `<p><b>${DIMS[x.k].k}</b> ${x.b > x.a ? 'עולה' : 'יורד'} מ-${x.a} ל-${x.b}: ${esc(arch(it.dna)[x.k])}.</p>`).join('') : '<p>אותו DNA. ההבדל הוא באופי, לא במבנה.</p>'}</div>` : `<div class="chg"><div class="lab">ההתחלה של הסולם</div><p>זו הנקודה הראשונה בסולם: ${esc(sc.label)}.</p></div>`}`; })()}
+      <details class="mdet"><summary>המודל של הפרק: איך ${esc(ch.lens)} הופך לאדריכלות</summary>${modelBlock(ch, true)}</details>
       ${it.quote ? (it.haiku ? `<div><div class="lab">הייקו מתוך הספר</div><div class="haiku">${esc(it.quote).replace(/ \/ /g, '\n')}</div></div>`
         : `<blockquote class="quote">${lines(it.quote)}<cite>${it.custom ? 'נוסף על ידך' : it.src === 'new' ? 'דוגמה חדשה, לא מתוך הספר' : `מתוך "${BOOK.title}"`}</cite></blockquote>`) : ''}
       ${it.tip ? `<div class="tip"><b>טיפ ביצוע:</b> ${lines(it.tip)}</div>` : ''}
@@ -788,6 +819,53 @@ function viewLegend() {
   document.getElementById('impJ').onchange = async e => { try { const d = JSON.parse(await e.target.files[0].text()); Object.entries(d).forEach(([k, arr]) => { if (!CH[k]) return; arr.forEach(x => { if (!byId[x.id]) { (CUSTOM[k] ||= []).push(x); CH[k].items.push({ ...x, custom: true }); } }); }); lsSet(LS, CUSTOM); reindex(); toast('יובא'); viewLegend(); } catch { toast('הקובץ לא תקין'); } };
 }
 
+// ================= המודל =================
+function viewModel(cid) {
+  const ch = CH[cid] || CH.frequencies;
+  const sc = scaleOf(ch);
+  const ex = [...ch.items].sort((a, b) => sc.val(a) - sc.val(b))[0];
+  const m = CHAPTER_MODELS[ch.id];
+  const A = arch(ex.dna), W = wellOf(ex.dna);
+  const span = c => DIMS.map((_, k) => { const v = c.items.map(i => i.dna[k]); return { min: Math.min(...v), max: Math.max(...v), avg: v.reduce((a, b) => a + b, 0) / v.length }; });
+  const widest = [...CHAPTERS].sort((a, b) => span(b).reduce((s, x) => s + x.max - x.min, 0) - span(a).reduce((s, x) => s + x.max - x.min, 0))[0];
+  app.innerHTML = `
+  <section class="view model" style="--c:${ch.color}">
+    <div class="mhead">
+      <h1>המודל<br><span>איך רעיון הופך לחדר, ומה החדר עושה לאדם</span></h1>
+      <p class="body">כל דוגמה בספר עוברת את אותה שרשרת של שש חוליות.<br>החוליות 1 עד 3 שונות בכל פרק: לכל תחום הפרמטרים שלו.<br>החוליות 4 עד 6 משותפות לכל הספר. לכן אפשר להשוות בין תדר מוח, גז אציל ומילה ביפנית.</p>
+    </div>
+    <div class="chain-pick tools">דוגמה לשרשרת: <select id="mch">${CHAPTERS.map(c => `<option value="${c.id}" ${c === ch ? 'selected' : ''}>${c.n}. ${c.lens}</option>`).join('')}</select> <span>הדוגמה הראשונה בסולם: <b>${esc(ex.name)}</b></span></div>
+    <ol class="chain">
+      <li><i>1</i><b>משפחה</b><span>${ch.family.name}: ${ch.family.sub}</span><em>שלוש משפחות, לפי הכריכה</em></li>
+      <li><i>2</i><b>פרק</b><span>${ch.lens}: ${esc(ch.title)}</span><em>העדשה: מאיזה תחום מגיע הרעיון</em></li>
+      <li><i>3</i><b>פרמטרי התחום</b><span>${m.params.map(p => esc(p.n)).join(', ')}<br><b class="v">${esc(sc.label)}: ${esc(sc.text(sc.val(ex), ex))}</b></span><em>מה משתנה בין דוגמה לדוגמה, בשפת התחום</em></li>
+      <li><i>4</i><b>חמשת הממדים</b><span>${DIMS.map((d, k) => `${d.k} ${ex.dna[k]}`).join(' · ')}</span><em>שפה אחת לכל הספר, 1 עד 5</em></li>
+      <li><i>5</i><b>פרמטרים אדריכליים</b><span>${A.slice(0, 3).map(esc).join('<br>')}</span><em>נוסחה קבועה: כך נבנה החדר בסטודיו</em></li>
+      <li><i>6</i><b>רווחה</b><span>${W.map(w => esc(w.t)).join('<br>') || 'מאוזן'}</span><em>מה החלל עושה לגוף ולנפש</em></li>
+    </ol>
+    <div class="mgrid">
+      <div class="mcol">
+        <h2>חוליות 4 עד 6: חמשת הממדים</h2>
+        <p class="tool-note">כל ממד נמדד מ-1 עד 5. הערך הוא קריאה פרשנית של העורך, והתרגום לאדריכלות הוא נוסחה קבועה.</p>
+        <table class="dimt"><thead><tr><th>ממד</th><th>מה הוא מודד</th><th>איך הוא נבנה</th><th>נמוך: מה זה עושה</th><th>גבוה: מה זה עושה</th></tr></thead>
+        <tbody>${DIM_MODEL.map(d => `<tr><td><b>${d.k}</b></td><td>${esc(d.measures)}</td><td>${esc(d.arch)}</td><td>${esc(d.low)}</td><td>${esc(d.high)}</td></tr><tr class="srcr"><td></td><td colspan="4">על מה זה נשען: ${esc(d.src)}</td></tr>`).join('')}</tbody></table>
+      </div>
+      <div class="mcol">
+        <h2>בין פרק לפרק, ובתוך כל פרק</h2>
+        <p class="tool-note">לכל פרק ולכל ממד: הפס הוא המנעד, מהדוגמה הנמוכה לגבוהה. הנקודה היא הממוצע.<br><span class="mk">המנעד הרחב ביותר: ${widest.lens}.</span></p>
+        <div class="matrix">
+          <div class="mrow mh"><span></span>${DIMS.map(d => `<b>${d.k}</b>`).join('')}</div>
+          ${CHAPTERS.map(c => `<a class="mrow" href="#/model/${c.id}" style="--c:${c.color}"><span>${c.n}. ${c.lens}</span>${span(c).map(x => `<i><u style="right:${(x.min - 1) / 4 * 100}%;width:${Math.max(3, (x.max - x.min) / 4 * 100)}%"></u><s style="right:${(x.avg - 1) / 4 * 100}%"></s></i>`).join('')}</a>`).join('')}
+          <div class="mrow mh"><span></span>${DIMS.map(d => `<em>${d.lo} ← → ${d.hi}</em>`).join('')}</div>
+        </div>
+      </div>
+    </div>
+    <h2 class="mh2">חוליות 1 עד 3: המודל של כל פרק</h2>
+    ${FAMILIES.map(f => `<div class="fam-h">מרחבים ${f.name}</div><div class="mcards">${CHAPTERS.filter(c => c.family === f).map(c => `<article class="mcard" style="--c:${c.color}"><h3><a href="#/c/${c.id}">${c.n}. ${c.lens}: ${esc(c.title)}</a></h3>${modelBlock(c)}</article>`).join('')}</div>`).join('')}
+  </section>`;
+  document.getElementById('mch').onchange = e => { location.hash = `#/model/${e.target.value}`; };
+}
+
 // ================= ניתוב =================
 let lastHash = '#/';
 function route() {
@@ -812,10 +890,11 @@ function route() {
   else if (a === 'narratives') viewNarratives();
   else if (a === 'legend') viewLegend();
   else if (a === 'pages') viewPages(b);
+  else if (a === 'model') viewModel(b);
   else viewHome();
   window.scrollTo(0, 0);
   lastHash = location.hash;
-  const t = a === 'c' ? (NAV.it?.name || NAV.ch.lens) : { atlas: 'אטלס', studio: 'סטודיו', narratives: 'נרטיבים', legend: 'מקרא', pages: 'דפי הספר' }[a];
+  const t = a === 'c' ? (NAV.it?.name || NAV.ch.lens) : { atlas: 'אטלס', studio: 'סטודיו', narratives: 'נרטיבים', legend: 'מקרא', pages: 'דפי הספר', model: 'המודל' }[a];
   document.title = t ? `${t} · מרחבי בחירה` : 'מרחבי בחירה';
 }
 window.addEventListener('hashchange', route);
