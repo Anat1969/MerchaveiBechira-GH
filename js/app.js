@@ -12,6 +12,38 @@ const lsGet = (k, d) => { try { return JSON.parse(localStorage.getItem(k) || JSO
 const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch { return false; } };
 const CUSTOM = lsGet(LS, {});
 const USERIMG = lsGet(LSI, {});
+// ענן (Supabase, פרויקט cultura-GH): כולם קוראים, רק העורכת כותבת דרך mb-upload
+const SB = 'https://ktqmwpbzcnzkhjskqisy.supabase.co', SBK = 'sb_publishable_IkreG7naPa1h-d4kGp1gpA_sLU4tg5q';
+const CLOUD = {};
+let OWNER = (() => { try { return localStorage.getItem('mb.owner') || ''; } catch { return ''; } })();
+async function cloudLoad() {
+  try {
+    const r = await fetch(`${SB}/rest/v1/mb_images?select=key,path`, { headers: { apikey: SBK } });
+    if (!r.ok) return;
+    for (const x of await r.json()) CLOUD[x.key] = `${SB}/storage/v1/object/public/merchavei-media/${x.path}`;
+    if (/^#\/c\/[^/]+\/[^/]+/.test(location.hash)) route();
+  } catch {}
+}
+async function cloudCall(body) {
+  const r = await fetch(`${SB}/functions/v1/mb-upload`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-owner-key': OWNER, apikey: SBK }, body: JSON.stringify(body) });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || r.status);
+  return j;
+}
+async function cloudPut(key, data) { const j = await cloudCall({ action: 'put', key, data }); CLOUD[key] = j.url; return j.url; }
+async function ownerLogin() {
+  const k = prompt(OWNER ? 'מצב עורכת פעיל. להחלפת סיסמה כתבי סיסמה חדשה, או השאירי ריק ליציאה:' : 'סיסמת עורכת (נשמרת בדפדפן הזה בלבד):');
+  if (k === null) return;
+  if (!k) { OWNER = ''; try { localStorage.removeItem('mb.owner'); } catch {} toast('יצאת ממצב עורכת'); route(); return; }
+  OWNER = k;
+  try { await cloudCall({ action: 'check' }); try { localStorage.setItem('mb.owner', k); } catch {} toast('מצב עורכת פעיל: תמונות שתדביקי יישמרו בענן ויוצגו לכולם'); route(); }
+  catch (e) { OWNER = ''; toast(`הסיסמה לא התקבלה (${e.message})`); }
+}
+async function syncAll() {
+  const keys = Object.keys(USERIMG); let ok = 0;
+  for (const k of keys) { try { toast(`מעלה לענן ${ok + 1} מתוך ${keys.length}`); await cloudPut(k, USERIMG[k]); delete USERIMG[k]; ok++; } catch (e) { toast(`נעצר: ${e.message}`); break; } }
+  lsSet(LSI, USERIMG); toast(`${ok} תמונות נשמרו בענן ויוצגו לכולם`); route();
+}
 CHAPTERS.forEach(ch => (CUSTOM[ch.id] || []).forEach(it => ch.items.push({ ...it, custom: true })));
 
 const DIMS = BOOK.dims;
@@ -347,7 +379,7 @@ function levelsOf(it) {
 }
 const imgKey = (it, lv) => lv === 'live' ? it.id : `${it.id}:${lv}`;
 const repoSrc = k => REPO.has(k) ? `img/lv/${k.replace(':', '_')}.jpg` : '';
-const lvImg = (it, lv) => USERIMG[imgKey(it, lv)] || repoSrc(imgKey(it, lv)) || (lv === 'live' && it.img ? src(it.img) : '');
+const lvImg = (it, lv) => USERIMG[imgKey(it, lv)] || CLOUD[imgKey(it, lv)] || repoSrc(imgKey(it, lv)) || (lv === 'live' && it.img ? src(it.img) : '');
 function exportImgs() {
   const keys = Object.keys(USERIMG);
   if (!keys.length) { toast('אין עדיין תמונות שהעלית'); return; }
@@ -368,9 +400,9 @@ function viewItem(ch, it) {
   const SHOW = n === 2 ? ['real', 'live'] : LV.map(x => x[0]);
   const LVN = { model: 'הקונספט כמודל תכנוני', real: 'הקונספט כמבנה ראליסטי', live: 'הקונספט כמרחב מחייה' };
   const sq = (lv, big) => { const im = lvImg(it, lv); return `<div class="sq ${im ? '' : 'empty'} ${big ? 'big' : ''}" data-drop="${lv}" tabindex="0" ${im ? `style="background-image:url('${im}')"` : ''}>${im ? '' : `<span>${big ? 'מדביקים (Ctrl+V), גוררים או מעלים תמונה 1:1' : '1:1'}</span>`}</div>`; };
-  const acts = k => `<div class="row"><button class="btn primary cpL" data-lv="${k}" data-d="${esc(L[k].prompt)}">העתקת הפרומפט</button><label class="btn" data-d="מעלים את התמונה שנוצרה מהפרומפט. אפשר גם להדביק או לגרור">העלאת תמונה<input type="file" accept="image/*" hidden data-up="${k}"></label>${USERIMG[imgKey(it, k)] ? `<button class="btn rmL" data-lv="${k}" data-d="מסיר את התמונה שלך מהרמה הזו">הסרה</button>` : ''}</div>`;
+  const acts = k => `<div class="row"><button class="btn primary cpL" data-lv="${k}" data-d="${esc(L[k].prompt)}">העתקת הפרומפט</button><label class="btn" data-d="מעלים את התמונה שנוצרה מהפרומפט. אפשר גם להדביק או לגרור">העלאת תמונה<input type="file" accept="image/*" hidden data-up="${k}"></label>${USERIMG[imgKey(it, k)] || (OWNER && CLOUD[imgKey(it, k)]) ? `<button class="btn rmL" data-lv="${k}" data-d="מסיר את התמונה שלך מהרמה הזו">הסרה</button>` : ''}</div>`;
   const nm = k => { const j = LV.findIndex(x => x[0] === k); return `${j + 1} · ${LV[j][1]}`; };
-  const seg = `<div class="lvbar"><span class="lab">שלוש רמות המחשה</span><div class="seg">${[[1, 'תמונה אחת', 'רמה אחת בגדול, והטקסט שלה מתחתיה'], [2, 'מבנה ומרחב', 'המבנה הראליסטי ומרחב המחייה, זה לצד זה'], [3, 'מרעיון למציאות', 'שלוש הרמות ברצף: המודל, המבנה, והמרחב שגרים בו']].map(([k, t, d]) => `<button class="${n === k ? 'on' : ''}" data-n="${k}" data-d="${d}">${t}</button>`).join('')}</div>${Object.keys(USERIMG).length ? `<button class="lnk xport" data-d="מוריד קובץ אחד עם כל התמונות שהעלית, כדי לשמור אותן בריפו ולהציג לכולם">ייצוא התמונות שלי (${Object.keys(USERIMG).length})</button>` : ''}<div hidden></div></div>`;
+  const seg = `<div class="lvbar"><span class="lab">שלוש רמות המחשה</span><div class="seg">${[[1, 'תמונה אחת', 'רמה אחת בגדול, והטקסט שלה מתחתיה'], [2, 'מבנה ומרחב', 'המבנה הראליסטי ומרחב המחייה, זה לצד זה'], [3, 'מרעיון למציאות', 'שלוש הרמות ברצף: המודל, המבנה, והמרחב שגרים בו']].map(([k, t, d]) => `<button class="${n === k ? 'on' : ''}" data-n="${k}" data-d="${d}">${t}</button>`).join('')}</div>${Object.keys(USERIMG).length ? (OWNER ? `<button class="lnk sync" data-d="מעלה לענן את כל התמונות ששמורות רק בדפדפן הזה, כדי שכולם יראו אותן">העלאת התמונות שלי לענן (${Object.keys(USERIMG).length})</button>` : `<button class="lnk owner" data-d="כניסה עם סיסמת העורכת, כדי לשמור את התמונות בענן ולהציג אותן לכולם">${Object.keys(USERIMG).length} תמונות רק בדפדפן הזה: מצב עורכת</button>`) : ''}<div hidden></div></div>`;
   const card = k => `<div class="lcard" data-lv="${k}">${sq(k, true)}<div class="lc-t"><b>${nm(k)}</b><div class="lc-cap">${esc(L[k].cap)}</div><small>${esc(L[k].sub)}</small>${acts(k)}</div></div>`;
   app.innerHTML = `
   <section class="view item3 ${cmp ? 'cmp' : ''}" style="--c:${ch.color}">
@@ -423,9 +455,11 @@ function viewItem(ch, it) {
     if (p) lightbox({ img: pageSrc(+p.dataset.page), title: `${it.name} · עמוד ${p.dataset.page}`, color: ch.color });
     if (e.target.id === 'delCustom') delCustom(it.id);
     if (e.target.closest('.xport')) { exportImgs(); return; }
+    if (e.target.closest('.sync')) { syncAll(); return; }
+    if (e.target.closest('.owner')) { ownerLogin(); return; }
     const c = e.target.closest('[data-n]'); if (c) { VIEW.n = +c.dataset.n; route(); return; }
     const cp = e.target.closest('.cpL'); if (cp) { navigator.clipboard?.writeText(L[cp.dataset.lv].prompt).then(() => toast('הפרומפט הועתק. אחרי שיוצרים, מדביקים את התמונה כאן'), () => toast('ההעתקה נחסמה בדפדפן')); return; }
-    const rm = e.target.closest('.rmL'); if (rm) { delete USERIMG[imgKey(it, rm.dataset.lv)]; lsSet(LSI, USERIMG); route(); return; }
+    const rm = e.target.closest('.rmL'); if (rm) { const k = imgKey(it, rm.dataset.lv); if (USERIMG[k]) { delete USERIMG[k]; lsSet(LSI, USERIMG); route(); } else if (CLOUD[k] && OWNER) cloudCall({ action: 'del', key: k }).then(() => { delete CLOUD[k]; toast('התמונה הוסרה מהענן'); route(); }, er => toast(`לא הוסר (${er.message})`)); return; }
     const big = e.target.closest('.sq.big'); if (big && !cmp && !big.classList.contains('empty')) { lightbox({ img: lvImg(it, big.dataset.drop), title: `${it.name} · ${LV.find(x => x[0] === big.dataset.drop)[1]}`, page: big.dataset.drop === 'live' ? it.page : null, color: ch.color }); return; }
     const th = e.target.closest('.lthumb'); if (th) { VIEW.lv[it.id] = th.dataset.lv; route(); return; }
     const card = e.target.closest('.lcard'); if (card && cmp && !e.target.closest('button,label,input')) { VIEW.lv[it.id] = card.dataset.lv; VIEW.n = 1; route(); }
@@ -443,10 +477,11 @@ function bindLevelDrops(sec, it, active) {
         const s = Math.min(1, 1400 / Math.max(im.width, im.height)), c = document.createElement('canvas');
         c.width = Math.round(im.width * s); c.height = Math.round(im.height * s);
         c.getContext('2d').drawImage(im, 0, 0, c.width, c.height);
-        const key = imgKey(it, lv);
-        USERIMG[key] = c.toDataURL('image/jpeg', .86);
-        if (!lsSet(LSI, USERIMG)) { delete USERIMG[key]; toast('אין מקום בדפדפן לתמונה נוספת'); return; }
-        VIEW.lv[it.id] = lv; toast('התמונה נכנסה למקום'); route();
+        const key = imgKey(it, lv), data = c.toDataURL('image/jpeg', .86);
+        VIEW.lv[it.id] = lv;
+        const keepLocal = msg => { USERIMG[key] = data; if (!lsSet(LSI, USERIMG)) { delete USERIMG[key]; toast('אין מקום בדפדפן לתמונה נוספת'); return; } toast(msg); route(); };
+        if (OWNER) { toast('שומרת בענן...'); cloudPut(key, data).then(() => { delete USERIMG[key]; lsSet(LSI, USERIMG); toast('נשמר בענן. כל מי שנכנס רואה את התמונה'); route(); }, e => keepLocal(`לא נשמר בענן (${e.message}). נשמר בדפדפן בינתיים`)); }
+        else keepLocal('התמונה נשמרה בדפדפן הזה. כדי שכולם יראו: מצב עורכת בתפריט');
       };
       im.src = r.result;
     };
@@ -962,6 +997,7 @@ menu.addEventListener('click', e => {
   const act = e.target.dataset.act;
   if (act === 'print') window.print();
   if (act === 'export') exportImgs();
+  if (act === 'owner') ownerLogin();
   if (act === 'link') navigator.clipboard?.writeText(location.href).then(() => toast('הקישור הועתק'), () => toast('ההעתקה נחסמה בדפדפן'));
   if (act === 'motion') { const s = document.body.classList.toggle('still'); e.target.textContent = s ? 'הפעלת תנועה' : 'עצירת תנועה'; toast(s ? 'התנועה נעצרה' : 'התנועה חזרה'); }
 });
@@ -979,3 +1015,4 @@ document.addEventListener('mouseover', e => {
 });
 
 route();
+cloudLoad();

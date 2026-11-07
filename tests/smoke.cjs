@@ -10,7 +10,7 @@ const routes = ['', 'c/math', 'c/math/golden', 'studio/delta?dna=1,5,1,1,3', 'c/
     const p = await b.newPage({ viewport: vp });
     const errs = [];
     p.on('pageerror', e => errs.push(String(e)));
-    p.on('console', m => { if (m.type() === 'error' && !/fonts\.g|pollinations/.test(m.text())) errs.push(m.text()); });
+    p.on('console', m => { if (m.type() === 'error' && !/fonts\.g|pollinations|TUNNEL_CONNECTION|supabase/.test(m.text())) errs.push(m.text()); });
     for (const r of routes) {
       await p.goto(BASE + '#/' + r); await p.waitForTimeout(r.startsWith('studio') ? 3000 : 800);
       const ov = await p.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1);
