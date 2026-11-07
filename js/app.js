@@ -923,9 +923,9 @@ document.addEventListener('mouseover', e => {
   tip.innerHTML = esc(b.dataset.d).replace(/\n/g, '<br>');
   const r = b.getBoundingClientRect();
   tip.classList.add('on');
-  const tw = tip.offsetWidth;
-  tip.style.top = `${r.bottom + 6}px`;
-  tip.style.left = `${Math.max(8, Math.min(innerWidth - tw - 8, r.left + r.width / 2 - tw / 2))}px`;
+  const tw = tip.offsetWidth, z = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--z')) || 1;
+  tip.style.top = `${(r.bottom + 6) / z}px`;
+  tip.style.left = `${Math.max(8, Math.min(innerWidth / z - tw - 8, (r.left + r.width / 2) / z - tw / 2))}px`;
 });
 
 route();

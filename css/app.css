@@ -560,3 +560,12 @@ a.mrow:hover { background: var(--soft); }
   .mrow { grid-template-columns: 90px repeat(5, minmax(0, 1fr)); }
   .mrules div { grid-template-columns: 80px 42px 52px 1fr; }
 }
+
+/* ================= הגדלה יחסית ================= */
+:root { --z: 1; }
+html { zoom: var(--z); }
+.view { height: calc(100vh / var(--z) - var(--top)); height: calc(100dvh / var(--z) - var(--top)); }
+#app { min-height: calc(100vh / var(--z)); }
+.lb-body img { max-height: calc(82vh / var(--z)); }
+.lb-in { max-height: calc(94vh / var(--z)); max-width: min(1100px, calc(96vw / var(--z))); }
+@media (max-width: 900px) { .view { height: auto; } }

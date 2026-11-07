@@ -13,6 +13,17 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Assistant:wght@300;400;600;700;800&family=Frank+Ruhl+Libre:wght@300;500;700;900&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/app.css">
+<script>
+  // הגדלה יחסית במסכים גדולים: הכל גדל יחד, והדף עדיין ממלא את המסך בלי גלילה
+  (function () {
+    function fit() {
+      var w = innerWidth, h = innerHeight;
+      var z = w < 900 ? 1 : Math.max(1, Math.min(1.45, w / 1280, h / 820));
+      document.documentElement.style.setProperty('--z', z.toFixed(3));
+    }
+    fit(); addEventListener('resize', fit);
+  })();
+</script>
 <script type="importmap">
 { "imports": {
   "three": "./vendor/three/three.module.js",
