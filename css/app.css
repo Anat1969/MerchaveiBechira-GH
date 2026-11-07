@@ -633,3 +633,19 @@ html { zoom: var(--z); }
 .pick .diag { display:grid; gap:14px; }
 @media (max-width:900px) { .hero3 .diag { grid-template-columns:1fr; } }
 .item3 .hero3 { overflow-y: auto; }
+/* אזורים קבועים: תמונה וחלופות | טקסט | דיאגרמות */
+.item3 .hero3 { align-items: stretch; }
+.lvbar { display:flex; align-items:center; justify-content:space-between; gap:12px; width:100%; margin-bottom:10px; }
+.lvbar .lab { color:var(--mute); }
+.hero3 > .sq.big { align-self:center; width:min(100cqw - 40px, 100cqh - 200px); }
+.lthumbs { align-self:center; width:min(100cqw - 40px, 100cqh - 200px); display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-top:10px; }
+.lthumb { all:unset; cursor:pointer; display:grid; grid-template-columns:56px 1fr; align-items:center; gap:8px; padding:5px; background:var(--soft); font-size:13px; font-weight:700; color:var(--ink2); }
+.lthumb .sq { width:56px; font-size:10px; }
+.lthumb.on { background:#fff; box-shadow:inset 0 -3px 0 var(--c); color:var(--ink); }
+.lthumb:hover { background:#fff; }
+.hero3 .under { align-self:center; width:min(100cqw - 40px, 100cqh - 200px); }
+.item3.cmp .tri { padding:0; width:100%; }
+.item3.cmp .lcard .sq.big { width:100%; }
+.diagz { display:flex; flex-direction:column; gap:16px; }
+.diagz h3 { margin:0 0 4px; }
+@media (max-width:900px) { .hero3 > .sq.big, .lthumbs, .hero3 .under { width:100%; } }

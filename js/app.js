@@ -354,30 +354,26 @@ function viewItem(ch, it) {
   const L = levelsOf(it);
   const cur = VIEW.lv[it.id] || (lvImg(it, 'live') ? 'live' : 'model');
   const cmp = VIEW.cmp;
-  const diag = `<div class="diag">
-      <div><h3>העכביש: הדוגמה ותהודותיה</h3><p class="why">קו מלא: הדוגמה.<br>מקווקו: קרובות מתחומים אחרים, בצבע התחום שלהן.</p>
-        ${radar([{ vals: it.dna, color: ch.color, main: true }, ...res.map(r => ({ vals: r.o.dna, color: r.o.ch.color }))])}</div>
-      <div><h3>התנועה של הפרק: ${esc(sc.label)}</h3><div class="fxmini" id="fxmini"></div></div>
-</div>`;
+  const LVN = { model: 'הקונספט כמודל תכנוני', real: 'הקונספט כמבנה ראליסטי', live: 'הקונספט כמרחב מחייה' };
   const sq = (lv, big) => { const im = lvImg(it, lv); return `<div class="sq ${im ? '' : 'empty'} ${big ? 'big' : ''}" data-drop="${lv}" tabindex="0" ${im ? `style="background-image:url('${im}')"` : ''}>${im ? '' : `<span>${big ? 'מדביקים (Ctrl+V), גוררים או מעלים תמונה 1:1' : '1:1'}</span>`}</div>`; };
-  const card = lv => { const [k, n, d] = LV.find(x => x[0] === lv); const o = L[k]; return `
-    <div class="lcard ${lv === cur && !cmp ? 'on' : ''}" data-lv="${k}">
-      ${sq(k, cmp)}
-      <div class="lc-t"><b>${LV.indexOf(LV.find(x => x[0] === k)) + 1} · ${n}</b><div class="lc-cap">${esc(o.cap)}</div><small>${esc(o.sub)}</small>
-        <div class="row"><button class="btn primary cpL" data-lv="${k}" data-d="${esc(o.prompt)}">העתקת הפרומפט</button><label class="btn" data-d="מעלים את התמונה שנוצרה מהפרומפט. אפשר גם להדביק או לגרור">העלאה<input type="file" accept="image/*" hidden data-up="${k}"></label>${USERIMG[imgKey(it, k)] ? `<button class="btn rmL" data-lv="${k}" data-d="מסיר את התמונה שלך מהרמה הזו">הסרה</button>` : ''}</div></div>
-    </div>`; };
+  const acts = k => `<div class="row"><button class="btn primary cpL" data-lv="${k}" data-d="${esc(L[k].prompt)}">העתקת הפרומפט</button><label class="btn" data-d="מעלים את התמונה שנוצרה מהפרומפט. אפשר גם להדביק או לגרור">העלאת תמונה<input type="file" accept="image/*" hidden data-up="${k}"></label>${USERIMG[imgKey(it, k)] ? `<button class="btn rmL" data-lv="${k}" data-d="מסיר את התמונה שלך מהרמה הזו">הסרה</button>` : ''}</div>`;
+  const nm = k => { const j = LV.findIndex(x => x[0] === k); return `${j + 1} · ${LV[j][1]}`; };
+  const seg = `<div class="lvbar"><span class="lab">שלוש רמות המחשה</span><div class="seg"><button class="${cmp ? '' : 'on'}" data-cmp="0" data-d="תמונה אחת בגדול, והטקסט שלה מתחתיה">תמונה אחת</button><button class="${cmp ? 'on' : ''}" data-cmp="1" data-d="שלוש הרמות זו לצד זו, כדי לבחור">השוואה</button></div></div>`;
+  const card = k => `<div class="lcard" data-lv="${k}">${sq(k, true)}<div class="lc-t"><b>${nm(k)}</b><div class="lc-cap">${esc(L[k].cap)}</div><small>${esc(L[k].sub)}</small>${acts(k)}</div></div>`;
   app.innerHTML = `
   <section class="view item3 ${cmp ? 'cmp' : ''}" style="--c:${ch.color}">
-    ${cmp ? `<div class="tri">${LV.map(x => card(x[0])).join('')}</div>` : `
     <div class="hero3">
+      ${seg}
+      ${cmp ? `<div class="tri">${LV.map(x => card(x[0])).join('')}</div>` : `
       ${sq(cur, true)}
+      <div class="lthumbs">${LV.map(([k]) => `<button class="lthumb ${k === cur ? 'on' : ''}" data-lv="${k}" data-d="${esc(L[k].cap)}">${sq(k, false)}<span>${nm(k)}</span></button>`).join('')}</div>
       <div class="under">
-        <div class="u-name"><b>${esc(it.name)}</b><span>${LV.find(x => x[0] === cur)[1]}: ${esc(L[cur].cap)}</span></div>
-        <div class="u-read one"><div class="lab">${{ model: 'הקונספט כמודל תכנוני', real: 'הקונספט כמבנה ראליסטי', live: 'הקונספט כמרחב מחייה' }[cur]}</div><p>${esc(L[cur].read)}</p><small>${esc(L[cur].sub)}</small></div>
-        ${diag}
+        <div class="u-name"><b>${esc(it.name)}</b><span>${nm(cur)}: ${esc(L[cur].cap)}</span></div>
+        <div class="u-read one"><div class="lab">${LVN[cur]}</div><p>${esc(L[cur].read)}</p><small>${esc(L[cur].sub)}</small></div>
+        ${acts(cur)}
         ${L.auto ? '<p class="tool-note">נוסח אוטומטי שנבנה מהנתונים של הדוגמה. נוסח ערוך נכתב בהדרגה, דוגמה אחר דוגמה.</p>' : ''}
-      </div>
-    </div>`}
+      </div>`}
+    </div>
     <article class="copy" id="copy" ${cmp ? 'hidden' : ''}>
       <div class="chtag"><span class="chn">פרק ${ch.n}</span><span class="chl">${ch.lens}</span><span class="fam-s">${ch.family?.name || ''}</span></div>
       <h1>${esc(it.name)}</h1>
@@ -399,13 +395,12 @@ function viewItem(ch, it) {
       <details class="mdet"><summary>המודל של הפרק: איך ${esc(ch.lens)} הופך לאדריכלות</summary>${modelBlock(ch, true)}</details>
       <div class="src-row">${it.page ? `<button class="lnk" data-page="${it.page}">הדף המקורי בספר, עמוד ${it.page}</button>` : ''}<span>${it.page ? 'מרחב המחייה: הדמיית AI מתוך הספר' : it.custom ? 'נוסף על ידך' : 'הדמיה מהמודל התלת־ממדי'}</span>${it.custom ? `<button class="lnk" id="delCustom">מחיקת הדוגמה</button>` : ''}</div>
     </article>
-    <aside class="side pick">
-      <div class="seg wide"><button class="${cmp ? '' : 'on'}" data-cmp="0" data-d="תמונה אחת בגדול, והטקסט לידה">תמונה אחת</button><button class="${cmp ? 'on' : ''}" data-cmp="1" data-d="שלוש הרמות זו לצד זו, כדי לבחור">השוואה</button></div>
-      <h3>שלוש רמות המחשה</h3>
-      ${cmp ? '<p class="why">במצב השוואה, כל רמה מוצגת בגדול משמאל.<br>לוחצים על "תמונה אחת" כדי לחזור.</p>' : LV.map(x => card(x[0])).join('')}
-      ${cmp ? diag : ''}
-      <h3>תהודות מתחומים אחרים</h3>
-      <div class="res">${res.map(r => `<a href="#/c/${r.o.ch.id}/${r.o.id}" style="--c:${r.o.ch.color}"><span class="th" style="${thumbStyle(r.o)}"></span><span><span class="ch">${r.o.ch.lens}</span><div class="nm">${esc(r.o.name)}</div><div class="rule">משותף: ${esc(r.rule)}</div></span></a>`).join('')}</div>
+    <aside class="side diagz">
+      <div><h3>העכביש: הדוגמה ותהודותיה</h3><p class="why">קו מלא: הדוגמה.<br>מקווקו: קרובות מתחומים אחרים, בצבע התחום שלהן.</p>
+        ${radar([{ vals: it.dna, color: ch.color, main: true }, ...res.map(r => ({ vals: r.o.dna, color: r.o.ch.color }))])}</div>
+      <div><h3>התנועה של הפרק: ${esc(sc.label)}</h3><div class="fxmini" id="fxmini"></div></div>
+      <div><h3>תהודות מתחומים אחרים</h3>
+      <div class="res">${res.map(r => `<a href="#/c/${r.o.ch.id}/${r.o.id}" style="--c:${r.o.ch.color}"><span class="th" style="${thumbStyle(r.o)}"></span><span><span class="ch">${r.o.ch.lens}</span><div class="nm">${esc(r.o.name)}</div><div class="rule">משותף: ${esc(r.rule)}</div></span></a>`).join('')}</div></div>
       <div class="row"><a class="btn" href="#/studio/${it.id}" data-d="החדר שנבנה מחמשת הממדים, עם מכוונים">תלת־ממד</a><a class="btn" href="#/atlas/${it.id}" data-d="הדוגמה בין כל הדוגמאות">באטלס</a></div>
     </aside>
   </section>`;
@@ -418,8 +413,9 @@ function viewItem(ch, it) {
     const c = e.target.closest('[data-cmp]'); if (c) { VIEW.cmp = c.dataset.cmp === '1'; route(); return; }
     const cp = e.target.closest('.cpL'); if (cp) { navigator.clipboard?.writeText(L[cp.dataset.lv].prompt).then(() => toast('הפרומפט הועתק. אחרי שיוצרים, מדביקים את התמונה כאן'), () => toast('ההעתקה נחסמה בדפדפן')); return; }
     const rm = e.target.closest('.rmL'); if (rm) { delete USERIMG[imgKey(it, rm.dataset.lv)]; lsSet(LSI, USERIMG); route(); return; }
-    const big = e.target.closest('.sq.big'); if (big && !big.classList.contains('empty')) { lightbox({ img: lvImg(it, big.dataset.drop), title: `${it.name} · ${LV.find(x => x[0] === big.dataset.drop)[1]}`, page: big.dataset.drop === 'live' ? it.page : null, color: ch.color }); return; }
-    const card = e.target.closest('.lcard'); if (card && !cmp && !e.target.closest('button,label,input')) { VIEW.lv[it.id] = card.dataset.lv; route(); }
+    const big = e.target.closest('.sq.big'); if (big && !cmp && !big.classList.contains('empty')) { lightbox({ img: lvImg(it, big.dataset.drop), title: `${it.name} · ${LV.find(x => x[0] === big.dataset.drop)[1]}`, page: big.dataset.drop === 'live' ? it.page : null, color: ch.color }); return; }
+    const th = e.target.closest('.lthumb'); if (th) { VIEW.lv[it.id] = th.dataset.lv; route(); return; }
+    const card = e.target.closest('.lcard'); if (card && cmp && !e.target.closest('button,label,input')) { VIEW.lv[it.id] = card.dataset.lv; VIEW.cmp = false; route(); }
   });
   bindLevelDrops(sec, it, () => VIEW.lv[it.id] || cur);
 }
