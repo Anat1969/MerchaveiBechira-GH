@@ -333,6 +333,7 @@ function levelsOf(it) {
   return {
     auto: true,
     model: { cap: it.insight, sub: 'הקונספט לפני החומר: מודל עבודה לבן.',
+      read: `כמודל, ${it.name} הוא ${he}: ${A[1]}, ${A[2]}. בלי חומר ובלי פרטים, רק המסה, הפתחים והאור שמגלמים את הקונספט.`,
       prompt: `מודל עבודה אדריכלי מינימליסטי מגבס לבן ועץ בלסה שמגלם את ${it.name} (${ch.lens}): ${it.space} ${he}. המודל מונח על שולחן סטודיו בהיר, לידו סקיצות עיפרון של חתך, אור חלון רך מהצד וצל חד שמדגיש את המסה והפתחים. צילום בזווית אקסונומטרית של 30 מעלות, רקע לבן נקי, עדשת מאקרו 50 מ״מ. ${TAIL}` },
     real: { cap: `${it.name} כמבנה: ${A[1]}, ${A[0]}.`, sub: `איך זה נבנה באמת: ${site1}.`,
       read: `כמבנה, ${it.name} מתורגם כך: ${A[0]}, ${A[1]}, ${A[2]}. החומרים והחיבורים גלויים, כמו שהם נבנים באמת.`,
@@ -353,6 +354,11 @@ function viewItem(ch, it) {
   const L = levelsOf(it);
   const cur = VIEW.lv[it.id] || (lvImg(it, 'live') ? 'live' : 'model');
   const cmp = VIEW.cmp;
+  const diag = `<div class="diag">
+      <div><h3>העכביש: הדוגמה ותהודותיה</h3><p class="why">קו מלא: הדוגמה.<br>מקווקו: קרובות מתחומים אחרים, בצבע התחום שלהן.</p>
+        ${radar([{ vals: it.dna, color: ch.color, main: true }, ...res.map(r => ({ vals: r.o.dna, color: r.o.ch.color }))])}</div>
+      <div><h3>התנועה של הפרק: ${esc(sc.label)}</h3><div class="fxmini" id="fxmini"></div></div>
+</div>`;
   const sq = (lv, big) => { const im = lvImg(it, lv); return `<div class="sq ${im ? '' : 'empty'} ${big ? 'big' : ''}" data-drop="${lv}" tabindex="0" ${im ? `style="background-image:url('${im}')"` : ''}>${im ? '' : `<span>${big ? 'מדביקים (Ctrl+V), גוררים או מעלים תמונה 1:1' : '1:1'}</span>`}</div>`; };
   const card = lv => { const [k, n, d] = LV.find(x => x[0] === lv); const o = L[k]; return `
     <div class="lcard ${lv === cur && !cmp ? 'on' : ''}" data-lv="${k}">
@@ -367,7 +373,8 @@ function viewItem(ch, it) {
       ${sq(cur, true)}
       <div class="under">
         <div class="u-name"><b>${esc(it.name)}</b><span>${LV.find(x => x[0] === cur)[1]}: ${esc(L[cur].cap)}</span></div>
-        <div class="u-read"><div><div class="lab">המבנה הראליסטי</div><p>${esc(L.real.read)}</p></div><div><div class="lab">מרחב המחייה</div><p>${esc(L.live.read)}</p></div></div>
+        <div class="u-read one"><div class="lab">${{ model: 'הקונספט כמודל תכנוני', real: 'הקונספט כמבנה ראליסטי', live: 'הקונספט כמרחב מחייה' }[cur]}</div><p>${esc(L[cur].read)}</p><small>${esc(L[cur].sub)}</small></div>
+        ${diag}
         ${L.auto ? '<p class="tool-note">נוסח אוטומטי שנבנה מהנתונים של הדוגמה. נוסח ערוך נכתב בהדרגה, דוגמה אחר דוגמה.</p>' : ''}
       </div>
     </div>`}
@@ -385,21 +392,24 @@ function viewItem(ch, it) {
       ${(() => { const srt = [...ch.items].sort((a, b) => sc.val(a) - sc.val(b)); const j = srt.indexOf(it); const prev = srt[j - 1]; const ch2 = prev ? changeFrom(prev, it) : [];
         const W = wellOf(it.dna);
         return `<div class="well"><div class="lab">הרווחה של האדם בחלל הזה</div>${W.length ? W.map(w => `<p><b>${DIMS[w.k].k} ${w.v > 3 ? 'גבוה' : 'נמוך'} (${w.v}):</b> ${esc(w.t)}</p>`).join('') : '<p>כל הממדים מאוזנים. חלל ניטרלי, שמתאים לשימוש מגוון.</p>'}</div>
-        ${prev ? `<div class="chg"><div class="lab">מה השתנה מהדוגמה הקודמת בסולם: <a href="#/c/${ch.id}/${prev.id}">${esc(prev.name)}</a></div>${ch2.length ? ch2.map(x => `<p><b>${DIMS[x.k].k}</b> ${x.b > x.a ? 'עולה' : 'יורד'} מ-${x.a} ל-${x.b}: ${esc(arch(it.dna)[x.k])}.</p>`).join('') : '<p>אותו DNA. ההבדל הוא באופי, לא במבנה.</p>'}</div>` : ''}`; })()}
+        ${prev ? `<div class="chg"><div class="lab">מה השתנה מהדוגמה הקודמת בסולם: <a href="#/c/${ch.id}/${prev.id}">${esc(prev.name)}</a></div>${ch2.length ? ch2.map(x => `<p><b>${DIMS[x.k].k}</b> ${x.b > x.a ? 'עולה' : 'יורד'} מ-${x.a} ל-${x.b}: ${esc(arch(it.dna)[x.k])}.</p>`).join('') : '<p>אותו DNA. ההבדל הוא באופי, לא במבנה.</p>'}</div>` : `<div class="chg"><div class="lab">ההתחלה של הסולם</div><p>זו הנקודה הראשונה בסולם: ${esc(sc.label)}.</p></div>`}`; })()}
       ${it.quote ? (it.haiku ? `<div><div class="lab">הייקו מתוך הספר</div><div class="haiku">${esc(it.quote).replace(/ \/ /g, '\n')}</div></div>`
         : `<blockquote class="quote">${lines(it.quote)}<cite>${it.custom ? 'נוסף על ידך' : it.src === 'new' ? 'דוגמה חדשה, לא מתוך הספר' : `מתוך "${BOOK.title}"`}</cite></blockquote>`) : ''}
+      ${it.tip ? `<div class="tip"><b>טיפ ביצוע:</b> ${lines(it.tip)}</div>` : ''}
       <details class="mdet"><summary>המודל של הפרק: איך ${esc(ch.lens)} הופך לאדריכלות</summary>${modelBlock(ch, true)}</details>
-      <div class="src-row">${it.page ? `<button class="lnk" data-page="${it.page}">הדף המקורי בספר, עמוד ${it.page}</button>` : ''}${it.custom ? `<button class="lnk" id="delCustom">מחיקת הדוגמה</button>` : ''}</div>
+      <div class="src-row">${it.page ? `<button class="lnk" data-page="${it.page}">הדף המקורי בספר, עמוד ${it.page}</button>` : ''}<span>${it.page ? 'מרחב המחייה: הדמיית AI מתוך הספר' : it.custom ? 'נוסף על ידך' : 'הדמיה מהמודל התלת־ממדי'}</span>${it.custom ? `<button class="lnk" id="delCustom">מחיקת הדוגמה</button>` : ''}</div>
     </article>
     <aside class="side pick">
       <div class="seg wide"><button class="${cmp ? '' : 'on'}" data-cmp="0" data-d="תמונה אחת בגדול, והטקסט לידה">תמונה אחת</button><button class="${cmp ? 'on' : ''}" data-cmp="1" data-d="שלוש הרמות זו לצד זו, כדי לבחור">השוואה</button></div>
       <h3>שלוש רמות המחשה</h3>
       ${cmp ? '<p class="why">במצב השוואה, כל רמה מוצגת בגדול משמאל.<br>לוחצים על "תמונה אחת" כדי לחזור.</p>' : LV.map(x => card(x[0])).join('')}
+      ${cmp ? diag : ''}
       <h3>תהודות מתחומים אחרים</h3>
       <div class="res">${res.map(r => `<a href="#/c/${r.o.ch.id}/${r.o.id}" style="--c:${r.o.ch.color}"><span class="th" style="${thumbStyle(r.o)}"></span><span><span class="ch">${r.o.ch.lens}</span><div class="nm">${esc(r.o.name)}</div><div class="rule">משותף: ${esc(r.rule)}</div></span></a>`).join('')}</div>
-      <div class="row"><a class="btn" href="#/studio/${it.id}">תלת־ממד</a><a class="btn" href="#/atlas/${it.id}">באטלס</a></div>
+      <div class="row"><a class="btn" href="#/studio/${it.id}" data-d="החדר שנבנה מחמשת הממדים, עם מכוונים">תלת־ממד</a><a class="btn" href="#/atlas/${it.id}" data-d="הדוגמה בין כל הדוגמאות">באטלס</a></div>
     </aside>
   </section>`;
+  document.getElementById('fxmini').appendChild(live(null, ch.motion, { color: ch.color, alt: it.name, sv: v, frac: sc.f(v), dna: it.dna, glow: it.glow, label: sc.label, valueText: sc.text(v, it) }));
   const sec = app.querySelector('.item3');
   sec.addEventListener('click', e => {
     const p = e.target.closest('[data-page]');
