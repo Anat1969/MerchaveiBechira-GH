@@ -649,3 +649,9 @@ html { zoom: var(--z); }
 .diagz { display:flex; flex-direction:column; gap:16px; }
 .diagz h3 { margin:0 0 4px; }
 @media (max-width:900px) { .hero3 > .sq.big, .lthumbs, .hero3 .under { width:100%; } }
+/* מצבי תצוגה: 1, 2 (מבנה ומרחב), 3 (מרעיון למציאות) */
+.tri.n2 { grid-template-columns: repeat(2, minmax(0,1fr)); }
+.item3.cmp .tri .lcard { justify-items:center; }
+.item3.cmp .tri .lcard .sq.big { width: min(100%, 100cqh - 250px); }
+.item3.cmp .tri .lc-t { width: min(100%, 100cqh - 250px); }
+@media (max-width:900px) { .tri.n2 { grid-template-columns: 1fr; } .item3.cmp .tri .lcard .sq.big, .item3.cmp .tri .lc-t { width:100%; } }

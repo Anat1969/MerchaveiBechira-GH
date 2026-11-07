@@ -345,7 +345,7 @@ function levelsOf(it) {
 }
 const imgKey = (it, lv) => lv === 'live' ? it.id : `${it.id}:${lv}`;
 const lvImg = (it, lv) => USERIMG[imgKey(it, lv)] || (lv === 'live' && it.img ? src(it.img) : '');
-const VIEW = { lv: {}, cmp: false };
+const VIEW = { lv: {}, n: 1 };
 
 function viewItem(ch, it) {
   const sc = scaleOf(ch), v = sc.val(it);
@@ -353,18 +353,19 @@ function viewItem(ch, it) {
   const A = arch(it.dna);
   const L = levelsOf(it);
   const cur = VIEW.lv[it.id] || (lvImg(it, 'live') ? 'live' : 'model');
-  const cmp = VIEW.cmp;
+  const n = VIEW.n, cmp = n > 1;
+  const SHOW = n === 2 ? ['real', 'live'] : LV.map(x => x[0]);
   const LVN = { model: 'הקונספט כמודל תכנוני', real: 'הקונספט כמבנה ראליסטי', live: 'הקונספט כמרחב מחייה' };
   const sq = (lv, big) => { const im = lvImg(it, lv); return `<div class="sq ${im ? '' : 'empty'} ${big ? 'big' : ''}" data-drop="${lv}" tabindex="0" ${im ? `style="background-image:url('${im}')"` : ''}>${im ? '' : `<span>${big ? 'מדביקים (Ctrl+V), גוררים או מעלים תמונה 1:1' : '1:1'}</span>`}</div>`; };
   const acts = k => `<div class="row"><button class="btn primary cpL" data-lv="${k}" data-d="${esc(L[k].prompt)}">העתקת הפרומפט</button><label class="btn" data-d="מעלים את התמונה שנוצרה מהפרומפט. אפשר גם להדביק או לגרור">העלאת תמונה<input type="file" accept="image/*" hidden data-up="${k}"></label>${USERIMG[imgKey(it, k)] ? `<button class="btn rmL" data-lv="${k}" data-d="מסיר את התמונה שלך מהרמה הזו">הסרה</button>` : ''}</div>`;
   const nm = k => { const j = LV.findIndex(x => x[0] === k); return `${j + 1} · ${LV[j][1]}`; };
-  const seg = `<div class="lvbar"><span class="lab">שלוש רמות המחשה</span><div class="seg"><button class="${cmp ? '' : 'on'}" data-cmp="0" data-d="תמונה אחת בגדול, והטקסט שלה מתחתיה">תמונה אחת</button><button class="${cmp ? 'on' : ''}" data-cmp="1" data-d="שלוש הרמות זו לצד זו, כדי לבחור">השוואה</button></div></div>`;
+  const seg = `<div class="lvbar"><span class="lab">שלוש רמות המחשה</span><div class="seg">${[[1, 'תמונה אחת', 'רמה אחת בגדול, והטקסט שלה מתחתיה'], [2, 'מבנה ומרחב', 'המבנה הראליסטי ומרחב המחייה, זה לצד זה'], [3, 'מרעיון למציאות', 'שלוש הרמות ברצף: המודל, המבנה, והמרחב שגרים בו']].map(([k, t, d]) => `<button class="${n === k ? 'on' : ''}" data-n="${k}" data-d="${d}">${t}</button>`).join('')}</div></div>`;
   const card = k => `<div class="lcard" data-lv="${k}">${sq(k, true)}<div class="lc-t"><b>${nm(k)}</b><div class="lc-cap">${esc(L[k].cap)}</div><small>${esc(L[k].sub)}</small>${acts(k)}</div></div>`;
   app.innerHTML = `
   <section class="view item3 ${cmp ? 'cmp' : ''}" style="--c:${ch.color}">
     <div class="hero3">
       ${seg}
-      ${cmp ? `<div class="tri">${LV.map(x => card(x[0])).join('')}</div>` : `
+      ${cmp ? `<div class="tri n${n}">${SHOW.map(k => card(k)).join('')}</div>` : `
       ${sq(cur, true)}
       <div class="lthumbs">${LV.map(([k]) => `<button class="lthumb ${k === cur ? 'on' : ''}" data-lv="${k}" data-d="${esc(L[k].cap)}">${sq(k, false)}<span>${nm(k)}</span></button>`).join('')}</div>
       <div class="under">
@@ -410,12 +411,12 @@ function viewItem(ch, it) {
     const p = e.target.closest('[data-page]');
     if (p) lightbox({ img: pageSrc(+p.dataset.page), title: `${it.name} · עמוד ${p.dataset.page}`, color: ch.color });
     if (e.target.id === 'delCustom') delCustom(it.id);
-    const c = e.target.closest('[data-cmp]'); if (c) { VIEW.cmp = c.dataset.cmp === '1'; route(); return; }
+    const c = e.target.closest('[data-n]'); if (c) { VIEW.n = +c.dataset.n; route(); return; }
     const cp = e.target.closest('.cpL'); if (cp) { navigator.clipboard?.writeText(L[cp.dataset.lv].prompt).then(() => toast('הפרומפט הועתק. אחרי שיוצרים, מדביקים את התמונה כאן'), () => toast('ההעתקה נחסמה בדפדפן')); return; }
     const rm = e.target.closest('.rmL'); if (rm) { delete USERIMG[imgKey(it, rm.dataset.lv)]; lsSet(LSI, USERIMG); route(); return; }
     const big = e.target.closest('.sq.big'); if (big && !cmp && !big.classList.contains('empty')) { lightbox({ img: lvImg(it, big.dataset.drop), title: `${it.name} · ${LV.find(x => x[0] === big.dataset.drop)[1]}`, page: big.dataset.drop === 'live' ? it.page : null, color: ch.color }); return; }
     const th = e.target.closest('.lthumb'); if (th) { VIEW.lv[it.id] = th.dataset.lv; route(); return; }
-    const card = e.target.closest('.lcard'); if (card && cmp && !e.target.closest('button,label,input')) { VIEW.lv[it.id] = card.dataset.lv; VIEW.cmp = false; route(); }
+    const card = e.target.closest('.lcard'); if (card && cmp && !e.target.closest('button,label,input')) { VIEW.lv[it.id] = card.dataset.lv; VIEW.n = 1; route(); }
   });
   bindLevelDrops(sec, it, () => VIEW.lv[it.id] || cur);
 }
