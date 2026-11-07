@@ -672,3 +672,6 @@ html { zoom: var(--z); }
   .hero3 .lthumbs { width:64px; } .hero3 .lthumb .sq { width:56px; }
   .hero3 .under { width:100%; }
 }
+/* מתג הרמות צמוד לכותרת "שלוש רמות המחשה" */
+.lvbar { justify-content:flex-start; gap:14px; flex-wrap:wrap; }
+.lvbar .xport { margin-inline-start:auto; font-size:13px; }

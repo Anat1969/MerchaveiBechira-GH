@@ -3,6 +3,8 @@ import { BOOK, CHAPTERS, NARRATIVES, FAMILIES, DIM_MODEL, CHAPTER_MODELS, LEVELS
 // סדר הפרקים לפי שלוש המשפחות של הכריכה
 { const order = FAMILIES.flatMap(f => f.chapters); CHAPTERS.sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id)); CHAPTERS.forEach((c, i) => { c.n = i + 1; c.family = FAMILIES.find(f => f.chapters.includes(c.id)); }); }
 import { attachFx, hexA } from './fx.js';
+import REPOIMG from '../data/levels/images.js';
+const REPO = new Set(REPOIMG);
 
 // ================= נתונים =================
 const LS = 'mb.custom.v1', LSI = 'mb.userimg.v1';
@@ -344,7 +346,16 @@ function levelsOf(it) {
   };
 }
 const imgKey = (it, lv) => lv === 'live' ? it.id : `${it.id}:${lv}`;
-const lvImg = (it, lv) => USERIMG[imgKey(it, lv)] || (lv === 'live' && it.img ? src(it.img) : '');
+const repoSrc = k => REPO.has(k) ? `img/lv/${k.replace(':', '_')}.jpg` : '';
+const lvImg = (it, lv) => USERIMG[imgKey(it, lv)] || repoSrc(imgKey(it, lv)) || (lv === 'live' && it.img ? src(it.img) : '');
+function exportImgs() {
+  const keys = Object.keys(USERIMG);
+  if (!keys.length) { toast('אין עדיין תמונות שהעלית'); return; }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(USERIMG)], { type: 'application/json' }));
+  a.download = 'merchavei-images.json'; a.click();
+  toast(`${keys.length} תמונות יוצאו לקובץ. מעלים אותו לשיחה עם Claude לשמירה בריפו`);
+}
 const VIEW = { lv: {}, n: 1 };
 
 function viewItem(ch, it) {
@@ -359,7 +370,7 @@ function viewItem(ch, it) {
   const sq = (lv, big) => { const im = lvImg(it, lv); return `<div class="sq ${im ? '' : 'empty'} ${big ? 'big' : ''}" data-drop="${lv}" tabindex="0" ${im ? `style="background-image:url('${im}')"` : ''}>${im ? '' : `<span>${big ? 'מדביקים (Ctrl+V), גוררים או מעלים תמונה 1:1' : '1:1'}</span>`}</div>`; };
   const acts = k => `<div class="row"><button class="btn primary cpL" data-lv="${k}" data-d="${esc(L[k].prompt)}">העתקת הפרומפט</button><label class="btn" data-d="מעלים את התמונה שנוצרה מהפרומפט. אפשר גם להדביק או לגרור">העלאת תמונה<input type="file" accept="image/*" hidden data-up="${k}"></label>${USERIMG[imgKey(it, k)] ? `<button class="btn rmL" data-lv="${k}" data-d="מסיר את התמונה שלך מהרמה הזו">הסרה</button>` : ''}</div>`;
   const nm = k => { const j = LV.findIndex(x => x[0] === k); return `${j + 1} · ${LV[j][1]}`; };
-  const seg = `<div class="lvbar"><span class="lab">שלוש רמות המחשה</span><div class="seg">${[[1, 'תמונה אחת', 'רמה אחת בגדול, והטקסט שלה מתחתיה'], [2, 'מבנה ומרחב', 'המבנה הראליסטי ומרחב המחייה, זה לצד זה'], [3, 'מרעיון למציאות', 'שלוש הרמות ברצף: המודל, המבנה, והמרחב שגרים בו']].map(([k, t, d]) => `<button class="${n === k ? 'on' : ''}" data-n="${k}" data-d="${d}">${t}</button>`).join('')}</div></div>`;
+  const seg = `<div class="lvbar"><span class="lab">שלוש רמות המחשה</span><div class="seg">${[[1, 'תמונה אחת', 'רמה אחת בגדול, והטקסט שלה מתחתיה'], [2, 'מבנה ומרחב', 'המבנה הראליסטי ומרחב המחייה, זה לצד זה'], [3, 'מרעיון למציאות', 'שלוש הרמות ברצף: המודל, המבנה, והמרחב שגרים בו']].map(([k, t, d]) => `<button class="${n === k ? 'on' : ''}" data-n="${k}" data-d="${d}">${t}</button>`).join('')}</div>${Object.keys(USERIMG).length ? `<button class="lnk xport" data-d="מוריד קובץ אחד עם כל התמונות שהעלית, כדי לשמור אותן בריפו ולהציג לכולם">ייצוא התמונות שלי (${Object.keys(USERIMG).length})</button>` : ''}<div hidden></div></div>`;
   const card = k => `<div class="lcard" data-lv="${k}">${sq(k, true)}<div class="lc-t"><b>${nm(k)}</b><div class="lc-cap">${esc(L[k].cap)}</div><small>${esc(L[k].sub)}</small>${acts(k)}</div></div>`;
   app.innerHTML = `
   <section class="view item3 ${cmp ? 'cmp' : ''}" style="--c:${ch.color}">
@@ -411,6 +422,7 @@ function viewItem(ch, it) {
     const p = e.target.closest('[data-page]');
     if (p) lightbox({ img: pageSrc(+p.dataset.page), title: `${it.name} · עמוד ${p.dataset.page}`, color: ch.color });
     if (e.target.id === 'delCustom') delCustom(it.id);
+    if (e.target.closest('.xport')) { exportImgs(); return; }
     const c = e.target.closest('[data-n]'); if (c) { VIEW.n = +c.dataset.n; route(); return; }
     const cp = e.target.closest('.cpL'); if (cp) { navigator.clipboard?.writeText(L[cp.dataset.lv].prompt).then(() => toast('הפרומפט הועתק. אחרי שיוצרים, מדביקים את התמונה כאן'), () => toast('ההעתקה נחסמה בדפדפן')); return; }
     const rm = e.target.closest('.rmL'); if (rm) { delete USERIMG[imgKey(it, rm.dataset.lv)]; lsSet(LSI, USERIMG); route(); return; }
@@ -949,6 +961,7 @@ document.addEventListener('click', () => { menu.hidden = true; logo.setAttribute
 menu.addEventListener('click', e => {
   const act = e.target.dataset.act;
   if (act === 'print') window.print();
+  if (act === 'export') exportImgs();
   if (act === 'link') navigator.clipboard?.writeText(location.href).then(() => toast('הקישור הועתק'), () => toast('ההעתקה נחסמה בדפדפן'));
   if (act === 'motion') { const s = document.body.classList.toggle('still'); e.target.textContent = s ? 'הפעלת תנועה' : 'עצירת תנועה'; toast(s ? 'התנועה נעצרה' : 'התנועה חזרה'); }
 });
