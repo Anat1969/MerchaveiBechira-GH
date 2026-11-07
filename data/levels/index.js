@@ -10,5 +10,6 @@ import faith from './faith.js';
 import words from './words.js';
 import sefirot from './sefirot.js';
 import numbers from './numbers.js';
+import climate1 from './climate1.js';
 import climate2 from './climate2.js';
-export default { ...math, ...frequencies, ...gases, ...forces, ...philosophy, ...psychology, ...notes, ...faith, ...words, ...sefirot, ...numbers, ...climate2 };
+export default { ...math, ...frequencies, ...gases, ...forces, ...philosophy, ...psychology, ...notes, ...faith, ...words, ...sefirot, ...numbers, ...climate1, ...climate2 };
