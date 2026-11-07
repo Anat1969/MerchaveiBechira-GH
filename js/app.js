@@ -366,11 +366,11 @@ function viewItem(ch, it) {
     <div class="hero3">
       ${seg}
       ${cmp ? `<div class="tri n${n}">${SHOW.map(k => card(k)).join('')}</div>` : `
-      ${sq(cur, true)}
-      <div class="lthumbs">${LV.map(([k]) => `<button class="lthumb ${k === cur ? 'on' : ''}" data-lv="${k}" data-d="${esc(L[k].cap)}">${sq(k, false)}<span>${nm(k)}</span></button>`).join('')}</div>
+      <div class="stage">${sq(cur, true)}
+      <div class="lthumbs">${LV.map(([k]) => `<button class="lthumb ${k === cur ? 'on' : ''}" data-lv="${k}" data-d="${esc(L[k].cap)}">${sq(k, false)}<span>${nm(k)}</span></button>`).join('')}</div></div>
       <div class="under">
         <div class="u-name"><b>${esc(it.name)}</b><span>${nm(cur)}: ${esc(L[cur].cap)}</span></div>
-        <div class="u-read one"><div class="lab">${LVN[cur]}</div><p>${esc(L[cur].read)}</p><small>${esc(L[cur].sub)}</small></div>
+        <div class="u-read one"><div class="lab">${LVN[cur]}</div><p>${esc(L[cur].read)}</p><small>${esc(L[cur].sub)}</small>${cur === 'live' && !USERIMG[it.id] && it.img && !L.auto ? '<p class="tool-note">התמונה כרגע מתוך הספר. הטקסט והפרומפט מתארים את התמונה החדשה; מדביקים אותה כאן והיא מחליפה.</p>' : ''}</div>
         ${acts(cur)}
         ${L.auto ? '<p class="tool-note">נוסח אוטומטי שנבנה מהנתונים של הדוגמה. נוסח ערוך נכתב בהדרגה, דוגמה אחר דוגמה.</p>' : ''}
       </div>`}

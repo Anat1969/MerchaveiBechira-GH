@@ -655,3 +655,20 @@ html { zoom: var(--z); }
 .item3.cmp .tri .lcard .sq.big { width: min(100%, 100cqh - 250px); }
 .item3.cmp .tri .lc-t { width: min(100%, 100cqh - 250px); }
 @media (max-width:900px) { .tri.n2 { grid-template-columns: 1fr; } .item3.cmp .tri .lcard .sq.big, .item3.cmp .tri .lc-t { width:100%; } }
+/* תמונה בגודל המרבי, ממוזערות בטור לצידה, הטקסט ממש מתחתיה */
+.item3 { grid-template-columns: minmax(0,1.8fr) minmax(0,1fr) 270px; }
+.item3.cmp { grid-template-columns: minmax(0,1fr) 270px; }
+.hero3 .stage { display:grid; grid-template-columns: auto 84px; gap:10px; align-self:center; align-items:start; }
+.hero3 .stage > .sq.big { width: min(100cqw - 134px, 100cqh - 64px); }
+.hero3 .lthumbs { width:84px; margin:0; grid-template-columns:1fr; gap:10px; align-self:start; }
+.hero3 .lthumb { grid-template-columns:1fr; padding:4px; gap:4px; text-align:center; font-size:12px; }
+.hero3 .lthumb .sq { width:76px; }
+.hero3 .under { width: min(100cqw - 40px, 100cqh - 64px + 94px); align-self:center; }
+.item3.cmp .tri .lcard .sq.big, .item3.cmp .tri .lc-t { width: min(100%, 100cqh - 64px); }
+@media (max-width:900px) {
+  .item3, .item3.cmp { grid-template-columns: 1fr; }
+  .hero3 .stage { grid-template-columns: 1fr 64px; width:100%; }
+  .hero3 .stage > .sq.big { width:100%; }
+  .hero3 .lthumbs { width:64px; } .hero3 .lthumb .sq { width:56px; }
+  .hero3 .under { width:100%; }
+}
